@@ -219,7 +219,13 @@
       const toast = document.createElement('div');
       toast.className = `toast toast--${type}`;
       const icons = { success: '✅', error: '❌', warning: '⚠️', default: 'ℹ️' };
-      toast.innerHTML = `<span>${icons[type] || icons.default}</span><span>${message}</span>`;
+      toast.textContent = '';
+      const iconSpan = document.createElement('span');
+      iconSpan.textContent = icons[type] || icons.default;
+      const msgSpan = document.createElement('span');
+      msgSpan.textContent = message;
+      toast.appendChild(iconSpan);
+      toast.appendChild(msgSpan);
       container.appendChild(toast);
       setTimeout(() => toast.remove(), duration);
     },
@@ -1416,7 +1422,7 @@
           <td style="white-space:nowrap">${fmt.date(c.CreatedAt)}</td>
           <td>
             <button class="btn btn--outline btn--sm"
-                    onclick="Router.navigate('candidate-detail',{selectedCandidate:${JSON.stringify(c).replace(/"/g, '&quot;')}})"
+                    onclick="Router.navigate('candidate-detail',{selectedCandidateId:${jsq(c.CandidateID)}})"
                     aria-label="View ${escHtml(c.FullName)} details">View</button>
           </td>
         </tr>`;
@@ -1502,7 +1508,9 @@
 
     // ── CANDIDATE DETAIL ───────────────────────
     candidateDetail(container) {
-      const c = App.state.selectedCandidate;
+      const c = App.state.selectedCandidateId
+        ? (App.state.candidates || []).find(x => x.CandidateID === App.state.selectedCandidateId)
+        : App.state.selectedCandidate;
       if (!c) { Router.navigate('candidates'); return; }
 
       const statusOptions = [
@@ -1530,16 +1538,16 @@
           <p class="page-header__sub">${escHtml(c.Position)} · ${escHtml(c.Department)} · ${statusBadge(c.CurrentStatus)}</p>
         </div>
         <div class="page-header__actions">
-          <button class="btn btn--outline btn--sm" onclick="Views._openEditProfileModal('${escHtml(c.CandidateID)}')">
+          <button class="btn btn--outline btn--sm" onclick="Views._openEditProfileModal(${jsq(c.CandidateID)})">
             ✏️ Edit Profile
           </button>
-          <button class="btn btn--outline btn--sm" onclick="Views._openStatusModal('${escHtml(c.CandidateID)}','${escHtml(c.FullName)}')">
+          <button class="btn btn--outline btn--sm" onclick="Views._openStatusModal(${jsq(c.CandidateID)},${jsq(c.FullName)})">
             🔄 Update Status
           </button>
-          <button class="btn btn--outline btn--sm" onclick="Views._openEventModal('${escHtml(c.CandidateID)}')">
+          <button class="btn btn--outline btn--sm" onclick="Views._openEventModal(${jsq(c.CandidateID)})">
             📅 Add Event
           </button>
-          <button class="btn btn--primary" onclick="Views._openUploadModal('${escHtml(c.CandidateID)}','${escHtml(c.DriveFolderID || '')}')">
+          <button class="btn btn--primary" onclick="Views._openUploadModal(${jsq(c.CandidateID)},${jsq(c.DriveFolderID || '')})">
             📤 Upload Document
           </button>
         </div>
@@ -1759,7 +1767,7 @@
       </div>
       <div class="modal__footer">
         <button class="btn btn--outline" onclick="Modal.close()">Cancel</button>
-        <button class="btn btn--primary" onclick="Views._submitStatus('${candidateId}')">Save Status</button>
+        <button class="btn btn--primary" onclick="Views._submitStatus(${jsq(candidateId)})">Save Status</button>
       </div>`);
     },
 
@@ -1806,7 +1814,7 @@
       </div>
       <div class="modal__footer">
         <button class="btn btn--outline" onclick="Modal.close()">Cancel</button>
-        <button class="btn btn--primary" id="edit-save-btn" onclick="Views._submitEditProfile('${candidateId}')">Save Changes</button>
+        <button class="btn btn--primary" id="edit-save-btn" onclick="Views._submitEditProfile(${jsq(candidateId)})">Save Changes</button>
       </div>`);
     },
 
@@ -1882,7 +1890,7 @@
       <div class="modal__footer">
         <button class="btn btn--outline" onclick="Modal.close()">Cancel</button>
         <button class="btn btn--primary" id="upload-btn"
-                onclick="Views._submitUpload('${candidateId}','${folderId}')">Upload</button>
+                onclick="Views._submitUpload(${jsq(candidateId)},${jsq(folderId)})">Upload</button>
       </div>`);
     },
 
@@ -2375,7 +2383,7 @@
       const agendaTitleEl = document.getElementById('calendar-agenda-title');
       if (agendaTitleEl) agendaTitleEl.textContent = 'Upcoming Events';
       const initialFilter = App.state.filter || 'All';
-      const btn = document.querySelector(`button[data-cal-filter="${initialFilter}"]`);
+      const btn = document.querySelector(`button[data-cal-filter="${jsq(initialFilter)}"]`);
       Views._applyCalendarFilter(initialFilter, btn);
     },
 
@@ -2445,7 +2453,7 @@
           ${e.Description ? `<div style="font-size:.8rem;margin-top:4px;white-space:pre-wrap;color:var(--text-secondary)">${escHtml(e.Description)}</div>` : ''}
           
           <div class="event-card__actions">
-            ${e.Status === 'Active' ? `<button class="btn btn--outline btn--sm" onclick="Views._markEventComplete('${e.EventID}')">✔️ Mark Completed</button>` : `<span class="event-status event-status--${e.Status.toLowerCase()}">${e.Status}</span>`}
+            ${e.Status === 'Active' ? `<button class="btn btn--outline btn--sm" onclick="Views._markEventComplete(${jsq(e.EventID)})">✔️ Mark Completed</button>` : `<span class="event-status event-status--${e.Status.toLowerCase()}">${e.Status}</span>`}
           </div>
         </div>`;
       }).join('');
@@ -2471,7 +2479,7 @@
           <button class="modal__close" onclick="Modal.close()" aria-label="Close">✕</button>
         </div>
         <div class="modal__body">
-          <form id="eventForm" class="form-grid" onsubmit="Views._submitEvent(event, '${candidateId}')">
+          <form id="eventForm" class="form-grid" onsubmit="Views._submitEvent(event, ${jsq(candidateId)})">
             
             <div class="form-group col-span-2">
               <label class="form-label">Event Title <span class="required">*</span></label>
