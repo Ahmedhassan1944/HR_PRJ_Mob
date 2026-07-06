@@ -116,6 +116,8 @@ function requireRole_(allowedRoles) {
  * Called from the frontend via: google.script.run.api_getAllCandidates()
  */
 function api_getAllCandidates() {
+  const auth = requireRole_(['Admin', 'HR', 'Coordinator']);
+  if (!auth.authorized) return { success: false, error: auth.error };
   try {
     const sheet = getSheet_(SHEET_CANDIDATES);
     const [headers, ...rows] = sheet.getDataRange().getValues();
@@ -275,6 +277,8 @@ function api_updateCandidateStatus(candidateId, newStatus) {
  * @param {string} candidateId
  */
 function api_getDocumentsByCandidate(candidateId) {
+  const auth = requireRole_(['Admin', 'HR', 'Coordinator']);
+  if (!auth.authorized) return { success: false, error: auth.error };
   try {
     const sheet = getSheet_(SHEET_DOCUMENTS);
     const [headers, ...rows] = sheet.getDataRange().getValues();
@@ -297,6 +301,8 @@ function api_getDocumentsByCandidate(candidateId) {
  * Used by api_getDashboardData for doc-level KPI aggregation.
  */
 function api_getAllDocuments() {
+  const auth = requireRole_(['Admin', 'HR', 'Coordinator']);
+  if (!auth.authorized) return { success: false, error: auth.error };
   try {
     const sheet = getSheet_(SHEET_DOCUMENTS);
     const [headers, ...rows] = sheet.getDataRange().getValues();

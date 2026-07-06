@@ -47,11 +47,11 @@ function getAppCalendar_() {
 
   if (cachedId) {
     try {
-      return CalendarApp.getCalendarById(cachedId);
-    } catch (_) {
-      // Cached ID is stale
-      props.deleteProperty('APP_CALENDAR_ID');
-    }
+      const cal = CalendarApp.getCalendarById(cachedId);
+      if (cal) return cal;
+      // null = calendar was deleted or unshared — clear stale ID and fall through
+    } catch (_) {}
+    props.deleteProperty('APP_CALENDAR_ID');
   }
 
   // First-time lookup: search by name
@@ -208,6 +208,8 @@ function api_createCalendarEvent(candidateId, eventData) {
  * Gets all events for a specific candidate.
  */
 function api_getEventsByCandidate(candidateId) {
+  const auth = requireRole_(['Admin', 'HR', 'Coordinator']);
+  if (!auth.authorized) return { success: false, error: auth.error };
   try {
     const sheet = getEventsSheet_();
     const [headers, ...rows] = sheet.getDataRange().getValues();
@@ -234,6 +236,8 @@ function api_getEventsByCandidate(candidateId) {
  * Gets all active upcoming events for dashboard/calendar view.
  */
 function api_getAllUpcomingEvents() {
+  const auth = requireRole_(['Admin', 'HR', 'Coordinator']);
+  if (!auth.authorized) return { success: false, error: auth.error };
   try {
     const sheet = getEventsSheet_();
     const [headers, ...rows] = sheet.getDataRange().getValues();
