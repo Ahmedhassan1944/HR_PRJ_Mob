@@ -65,13 +65,13 @@
       if (document.getElementById('dark-mode-btn')) return; // already injected
       const footer = document.querySelector('.sidebar__footer');
       if (!footer) return;
-      const btn     = document.createElement('button');
-      btn.id        = 'dark-mode-btn';
+      const btn = document.createElement('button');
+      btn.id = 'dark-mode-btn';
       btn.className = 'dark-mode-btn';
-      btn.title     = 'Toggle Dark / Light Mode';
+      btn.title = 'Toggle Dark / Light Mode';
       btn.setAttribute('aria-label', 'Toggle Dark Mode');
       btn.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
-      btn.onclick     = () => App.toggleDarkMode();
+      btn.onclick = () => App.toggleDarkMode();
       footer.insertBefore(btn, footer.firstChild);
     }
   };
@@ -113,57 +113,57 @@
     // ── Mock data for local / offline preview ──
     _mockData(fnName, ...args) {
       const candidates = [
-        { CandidateID: 'c-001', FullName: 'Ahmed Ali',     Position: 'Civil Engineer',   Department: 'Projects',     Email: 'ahmed@test.com',  Nationality: 'Egyptian',  CurrentStatus: 'Pending Passport',             CreatedAt: '2026-06-01T08:00:00Z', DriveFolderID: 'folder-001' },
-        { CandidateID: 'c-002', FullName: 'Sara Mohamed',  Position: 'HR Specialist',    Department: 'HR',           Email: 'sara@test.com',   Nationality: 'Egyptian',  CurrentStatus: 'Pending Photo',                CreatedAt: '2026-06-03T09:00:00Z', DriveFolderID: 'folder-002' },
-        { CandidateID: 'c-003', FullName: 'Omar Khaled',   Position: 'Mech. Engineer',   Department: 'Maintenance',  Email: 'omar@test.com',   Nationality: 'Sudanese',  CurrentStatus: 'Documents Complete',           CreatedAt: '2026-06-05T10:00:00Z', DriveFolderID: 'folder-003' },
-        { CandidateID: 'c-004', FullName: 'Nadia Youssef', Position: 'Accountant',       Department: 'Finance',      Email: 'nadia@test.com',  Nationality: 'Egyptian',  CurrentStatus: 'Mobilized',                    CreatedAt: '2026-05-20T07:00:00Z', DriveFolderID: 'folder-004' },
-        { CandidateID: 'c-005', FullName: 'Khaled Hassan', Position: 'Site Supervisor',  Department: 'Projects',     Email: 'khaled@test.com', Nationality: 'Jordanian', CurrentStatus: 'Visa Pending',                 CreatedAt: '2026-06-10T11:00:00Z', DriveFolderID: 'folder-005' },
-        { CandidateID: 'c-006', FullName: 'Layla Ibrahim', Position: 'Safety Officer',   Department: 'Safety',       Email: 'layla@test.com',  Nationality: 'Egyptian',  CurrentStatus: 'Visa Completed',               CreatedAt: '2026-06-12T09:00:00Z', DriveFolderID: 'folder-006' },
-        { CandidateID: 'c-007', FullName: 'Hassan Nour',   Position: 'QC Inspector',     Department: 'Operations',   Email: 'hassan@test.com', Nationality: 'Sudanese',  CurrentStatus: 'Pending Academic Certificate', CreatedAt: '2026-06-14T08:00:00Z', DriveFolderID: 'folder-007' },
-        { CandidateID: 'c-008', FullName: 'Rania Saleh',   Position: 'Procurement Eng.', Department: 'Operations',   Email: 'rania@test.com',  Nationality: 'Egyptian',  CurrentStatus: 'New Candidate',                CreatedAt: '2026-06-20T10:00:00Z', DriveFolderID: '' },
+        { CandidateID: 'c-001', FullName: 'Ahmed Ali', Position: 'Civil Engineer', Department: 'Projects', Email: 'ahmed@test.com', Nationality: 'Egyptian', CurrentStatus: 'Pending Passport', CreatedAt: '2026-06-01T08:00:00Z', DriveFolderID: 'folder-001' },
+        { CandidateID: 'c-002', FullName: 'Sara Mohamed', Position: 'HR Specialist', Department: 'HR', Email: 'sara@test.com', Nationality: 'Egyptian', CurrentStatus: 'Pending Photo', CreatedAt: '2026-06-03T09:00:00Z', DriveFolderID: 'folder-002' },
+        { CandidateID: 'c-003', FullName: 'Omar Khaled', Position: 'Mech. Engineer', Department: 'Maintenance', Email: 'omar@test.com', Nationality: 'Sudanese', CurrentStatus: 'Documents Complete', CreatedAt: '2026-06-05T10:00:00Z', DriveFolderID: 'folder-003' },
+        { CandidateID: 'c-004', FullName: 'Nadia Youssef', Position: 'Accountant', Department: 'Finance', Email: 'nadia@test.com', Nationality: 'Egyptian', CurrentStatus: 'Mobilized', CreatedAt: '2026-05-20T07:00:00Z', DriveFolderID: 'folder-004' },
+        { CandidateID: 'c-005', FullName: 'Khaled Hassan', Position: 'Site Supervisor', Department: 'Projects', Email: 'khaled@test.com', Nationality: 'Jordanian', CurrentStatus: 'Visa Pending', CreatedAt: '2026-06-10T11:00:00Z', DriveFolderID: 'folder-005' },
+        { CandidateID: 'c-006', FullName: 'Layla Ibrahim', Position: 'Safety Officer', Department: 'Safety', Email: 'layla@test.com', Nationality: 'Egyptian', CurrentStatus: 'Visa Completed', CreatedAt: '2026-06-12T09:00:00Z', DriveFolderID: 'folder-006' },
+        { CandidateID: 'c-007', FullName: 'Hassan Nour', Position: 'QC Inspector', Department: 'Operations', Email: 'hassan@test.com', Nationality: 'Sudanese', CurrentStatus: 'Pending Academic Certificate', CreatedAt: '2026-06-14T08:00:00Z', DriveFolderID: 'folder-007' },
+        { CandidateID: 'c-008', FullName: 'Rania Saleh', Position: 'Procurement Eng.', Department: 'Operations', Email: 'rania@test.com', Nationality: 'Egyptian', CurrentStatus: 'New Candidate', CreatedAt: '2026-06-20T10:00:00Z', DriveFolderID: '' },
       ];
       const documents = [
         // ── c-001 Ahmed Ali: Passport✓ Photo(review) Medical(rejected) → 33% missing Photo,Medical,Acad,Visa,CV
-        { DocumentID: 'd-001', CandidateID: 'c-001', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-06-02T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-002', CandidateID: 'c-001', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-02T08:30:00Z', ApprovalStatus: 'Pending Review', ApprovedBy: '',               VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-003', CandidateID: 'c-001', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-06-02T09:00:00Z', ApprovalStatus: 'Rejected',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: 'Illegible scan' },
-        { DocumentID: 'd-003b', CandidateID: 'c-001', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-02T09:00:00Z', ApprovalStatus: 'Rejected',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: 'Illegible scan' },
+        { DocumentID: 'd-001', CandidateID: 'c-001', DocType: 'Passport', FileName: 'passport.pdf', FileURL: '#', UploadDate: '2026-06-02T08:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-002', CandidateID: 'c-001', DocType: 'Photo', FileName: 'photo.jpg', FileURL: '#', UploadDate: '2026-06-02T08:30:00Z', ApprovalStatus: 'Pending Review', ApprovedBy: '', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-003', CandidateID: 'c-001', DocType: 'Medical Examination', FileName: 'med_exam.pdf', FileURL: '#', UploadDate: '2026-06-02T09:00:00Z', ApprovalStatus: 'Rejected', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: 'Illegible scan' },
+        { DocumentID: 'd-003b', CandidateID: 'c-001', DocType: 'Medical Analysis', FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-02T09:00:00Z', ApprovalStatus: 'Rejected', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: 'Illegible scan' },
         // ── c-002 Sara Mohamed: Photo only → 17% missing Passport,Acad,Medical,Visa,CV
-        { DocumentID: 'd-010', CandidateID: 'c-002', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-04T08:00:00Z', ApprovalStatus: 'Pending Review', ApprovedBy: '',               VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-010', CandidateID: 'c-002', DocType: 'Photo', FileName: 'photo.jpg', FileURL: '#', UploadDate: '2026-06-04T08:00:00Z', ApprovalStatus: 'Pending Review', ApprovedBy: '', VersionNumber: 1, Remarks: '' },
         // ── c-003 Omar Khaled: All 6 docs approved → 100%
-        { DocumentID: 'd-004', CandidateID: 'c-003', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-06-06T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-005', CandidateID: 'c-003', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-06T08:30:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-006', CandidateID: 'c-003', DocType: 'Academic Certificate', FileName: 'degree.pdf',    FileURL: '#', UploadDate: '2026-06-06T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-007', CandidateID: 'c-003', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-06-06T09:30:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-007b', CandidateID: 'c-003', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-06T09:30:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-008', CandidateID: 'c-003', DocType: 'Visa',                 FileName: 'visa.pdf',      FileURL: '#', UploadDate: '2026-06-07T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-009', CandidateID: 'c-003', DocType: 'CV',                   FileName: 'cv.pdf',        FileURL: '#', UploadDate: '2026-06-07T08:30:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-004', CandidateID: 'c-003', DocType: 'Passport', FileName: 'passport.pdf', FileURL: '#', UploadDate: '2026-06-06T08:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-005', CandidateID: 'c-003', DocType: 'Photo', FileName: 'photo.jpg', FileURL: '#', UploadDate: '2026-06-06T08:30:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-006', CandidateID: 'c-003', DocType: 'Academic Certificate', FileName: 'degree.pdf', FileURL: '#', UploadDate: '2026-06-06T09:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-007', CandidateID: 'c-003', DocType: 'Medical Examination', FileName: 'med_exam.pdf', FileURL: '#', UploadDate: '2026-06-06T09:30:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-007b', CandidateID: 'c-003', DocType: 'Medical Analysis', FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-06T09:30:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-008', CandidateID: 'c-003', DocType: 'Visa', FileName: 'visa.pdf', FileURL: '#', UploadDate: '2026-06-07T08:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-009', CandidateID: 'c-003', DocType: 'CV', FileName: 'cv.pdf', FileURL: '#', UploadDate: '2026-06-07T08:30:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
         // ── c-004 Nadia Youssef: All 6 approved (Mobilized) → 100%
-        { DocumentID: 'd-011', CandidateID: 'c-004', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-05-21T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-012', CandidateID: 'c-004', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-05-21T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-013', CandidateID: 'c-004', DocType: 'Academic Certificate', FileName: 'degree.pdf',    FileURL: '#', UploadDate: '2026-05-22T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-014', CandidateID: 'c-004', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-05-22T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-014b', CandidateID: 'c-004', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-05-22T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-015', CandidateID: 'c-004', DocType: 'Visa',                 FileName: 'visa.pdf',      FileURL: '#', UploadDate: '2026-05-23T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-016', CandidateID: 'c-004', DocType: 'CV',                   FileName: 'cv.pdf',        FileURL: '#', UploadDate: '2026-05-23T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-011', CandidateID: 'c-004', DocType: 'Passport', FileName: 'passport.pdf', FileURL: '#', UploadDate: '2026-05-21T08:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-012', CandidateID: 'c-004', DocType: 'Photo', FileName: 'photo.jpg', FileURL: '#', UploadDate: '2026-05-21T09:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-013', CandidateID: 'c-004', DocType: 'Academic Certificate', FileName: 'degree.pdf', FileURL: '#', UploadDate: '2026-05-22T08:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-014', CandidateID: 'c-004', DocType: 'Medical Examination', FileName: 'med_exam.pdf', FileURL: '#', UploadDate: '2026-05-22T09:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-014b', CandidateID: 'c-004', DocType: 'Medical Analysis', FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-05-22T09:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-015', CandidateID: 'c-004', DocType: 'Visa', FileName: 'visa.pdf', FileURL: '#', UploadDate: '2026-05-23T08:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-016', CandidateID: 'c-004', DocType: 'CV', FileName: 'cv.pdf', FileURL: '#', UploadDate: '2026-05-23T09:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
         // ── c-005 Khaled Hassan: Passport,Photo,Acad,Medical → 67% missing Visa,CV
-        { DocumentID: 'd-017', CandidateID: 'c-005', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-06-11T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-018', CandidateID: 'c-005', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-11T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-019', CandidateID: 'c-005', DocType: 'Academic Certificate', FileName: 'degree.pdf',    FileURL: '#', UploadDate: '2026-06-11T10:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-020', CandidateID: 'c-005', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-06-11T11:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-020b', CandidateID: 'c-005', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-11T11:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-017', CandidateID: 'c-005', DocType: 'Passport', FileName: 'passport.pdf', FileURL: '#', UploadDate: '2026-06-11T08:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-018', CandidateID: 'c-005', DocType: 'Photo', FileName: 'photo.jpg', FileURL: '#', UploadDate: '2026-06-11T09:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-019', CandidateID: 'c-005', DocType: 'Academic Certificate', FileName: 'degree.pdf', FileURL: '#', UploadDate: '2026-06-11T10:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-020', CandidateID: 'c-005', DocType: 'Medical Examination', FileName: 'med_exam.pdf', FileURL: '#', UploadDate: '2026-06-11T11:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-020b', CandidateID: 'c-005', DocType: 'Medical Analysis', FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-11T11:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
         // ── c-006 Layla Ibrahim: Passport,Photo,Acad,Medical,Visa → 83% missing CV
-        { DocumentID: 'd-021', CandidateID: 'c-006', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-06-13T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-022', CandidateID: 'c-006', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-13T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-023', CandidateID: 'c-006', DocType: 'Academic Certificate', FileName: 'degree.pdf',    FileURL: '#', UploadDate: '2026-06-13T10:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-024', CandidateID: 'c-006', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-06-13T11:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-024b', CandidateID: 'c-006', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-13T11:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-025', CandidateID: 'c-006', DocType: 'Visa',                 FileName: 'visa.pdf',      FileURL: '#', UploadDate: '2026-06-14T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-021', CandidateID: 'c-006', DocType: 'Passport', FileName: 'passport.pdf', FileURL: '#', UploadDate: '2026-06-13T08:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-022', CandidateID: 'c-006', DocType: 'Photo', FileName: 'photo.jpg', FileURL: '#', UploadDate: '2026-06-13T09:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-023', CandidateID: 'c-006', DocType: 'Academic Certificate', FileName: 'degree.pdf', FileURL: '#', UploadDate: '2026-06-13T10:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-024', CandidateID: 'c-006', DocType: 'Medical Examination', FileName: 'med_exam.pdf', FileURL: '#', UploadDate: '2026-06-13T11:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-024b', CandidateID: 'c-006', DocType: 'Medical Analysis', FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-13T11:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-025', CandidateID: 'c-006', DocType: 'Visa', FileName: 'visa.pdf', FileURL: '#', UploadDate: '2026-06-14T08:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
         // ── c-007 Hassan Nour: Passport,Photo,Medical → 50% missing Acad,Visa,CV
-        { DocumentID: 'd-026', CandidateID: 'c-007', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-06-15T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-027', CandidateID: 'c-007', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-15T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-028', CandidateID: 'c-007', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-06-15T10:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
-        { DocumentID: 'd-028b', CandidateID: 'c-007', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-15T10:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-026', CandidateID: 'c-007', DocType: 'Passport', FileName: 'passport.pdf', FileURL: '#', UploadDate: '2026-06-15T08:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-027', CandidateID: 'c-007', DocType: 'Photo', FileName: 'photo.jpg', FileURL: '#', UploadDate: '2026-06-15T09:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-028', CandidateID: 'c-007', DocType: 'Medical Examination', FileName: 'med_exam.pdf', FileURL: '#', UploadDate: '2026-06-15T10:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-028b', CandidateID: 'c-007', DocType: 'Medical Analysis', FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-15T10:00:00Z', ApprovalStatus: 'Approved', ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
         // ── c-008 Rania Saleh: No docs yet → 0%
       ];
       const logs = [
@@ -219,13 +219,7 @@
       const toast = document.createElement('div');
       toast.className = `toast toast--${type}`;
       const icons = { success: '✅', error: '❌', warning: '⚠️', default: 'ℹ️' };
-      toast.textContent = '';
-      const iconSpan = document.createElement('span');
-      iconSpan.textContent = icons[type] || icons.default;
-      const msgSpan = document.createElement('span');
-      msgSpan.textContent = message;
-      toast.appendChild(iconSpan);
-      toast.appendChild(msgSpan);
+      toast.innerHTML = `<span>${icons[type] || icons.default}</span><span>${message}</span>`;
       container.appendChild(toast);
       setTimeout(() => toast.remove(), duration);
     },
@@ -281,27 +275,27 @@
   const statusBadge = (status) => {
     const map = {
       // ── Legacy statuses (backward-compatible) ──
-      'Documents Requested':           'pending',
-      'documents requested':           'pending',
-      'Pending Validation':            'review',
-      'pending validation':            'review',
-      'Pending Review':                'review',
-      'Approved':                      'approved',
-      'Approved – Medical':            'approved',
-      'Rejected':                      'rejected',
-      'Closed':                        'closed',
+      'Documents Requested': 'pending',
+      'documents requested': 'pending',
+      'Pending Validation': 'review',
+      'pending validation': 'review',
+      'Pending Review': 'review',
+      'Approved': 'approved',
+      'Approved – Medical': 'approved',
+      'Rejected': 'rejected',
+      'Closed': 'closed',
       // ── New lifecycle statuses ──
-      'New Candidate':                 'new',
-      'Pending Passport':              'pending',
-      'Pending Photo':                 'pending',
-      'Pending Academic Certificate':  'pending',
-      'Pending Medical':               'pending',
-      'Documents Complete':            'docs-complete',
-      'Visa Pending':                  'visa-pending',
-      'Visa Completed':                'visa-completed',
-      'Mobilized':                     'mobilized',
-      'Booked a medical examination':  'review',
-      'Documents Under Preparing':    'pending',
+      'New Candidate': 'new',
+      'Pending Passport': 'pending',
+      'Pending Photo': 'pending',
+      'Pending Academic Certificate': 'pending',
+      'Pending Medical': 'pending',
+      'Documents Complete': 'docs-complete',
+      'Visa Pending': 'visa-pending',
+      'Visa Completed': 'visa-completed',
+      'Mobilized': 'mobilized',
+      'Booked a medical examination': 'review',
+      'Documents Under Preparing': 'pending',
     };
     const cls = map[status] || 'pending';
     return `<span class="badge badge--${cls}">${status || 'Unknown'}</span>`;
@@ -332,7 +326,7 @@
     );
     const presentDocs = REQUIRED_DOCS.filter(req => uploadedTypes.has(req));
     const missingDocs = REQUIRED_DOCS.filter(req => !uploadedTypes.has(req));
-    const pct         = Math.round((presentDocs.length / REQUIRED_DOCS.length) * 100);
+    const pct = Math.round((presentDocs.length / REQUIRED_DOCS.length) * 100);
     return { pct, missingDocs, presentDocs };
   };
 
@@ -413,7 +407,7 @@
       Enterprise HR System v2.0<br>
       &copy; 2026
     </div>`;
-  App._injectDarkBtn();
+    App._injectDarkBtn();
   };
 
   // ─────────────────────────────────────────────
@@ -459,22 +453,22 @@
       <!-- KPI SECTIONS -->
       <div class="kpi-section-label">📊 Pipeline Overview</div>
       <div class="kpi-grid" id="kpi-grid-status">
-        ${[1,2,3,4,5,6,7,8].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
+        ${[1, 2, 3, 4, 5, 6, 7, 8].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
       </div>
 
       <div class="kpi-section-label" style="margin-top:var(--sp-5)">✅ Candidates WITH Document</div>
       <div class="kpi-grid" id="kpi-grid-has">
-        ${[1,2,3,4,5,6,7].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
+        ${[1, 2, 3, 4, 5, 6, 7].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
       </div>
 
       <div class="kpi-section-label" style="margin-top:var(--sp-5)">❌ Candidates MISSING Document</div>
       <div class="kpi-grid" id="kpi-grid-missing">
-        ${[1,2,3,4,5,6,7].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
+        ${[1, 2, 3, 4, 5, 6, 7].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
       </div>
 
       <div class="kpi-section-label" style="margin-top:var(--sp-5)">📅 Follow-up Calendar</div>
       <div class="kpi-grid" id="kpi-grid-calendar">
-        ${[1,2,3,4,5].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
+        ${[1, 2, 3, 4, 5].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
       </div>
 
       <!-- HINT BAR -->
@@ -524,45 +518,45 @@
 
           // ── Section 1: Status-based cards ──────────────────────────────
           document.getElementById('kpi-grid-status').innerHTML = [
-            Views._kpiCard('Active Cases',              k.activeCount        ?? '--', '🏗️',  'blue',   'All non-closed cases',            null),
-            Views._kpiCard('Missing Documents',         k.missingDocs        ?? '--', '❗',   'orange', 'Incomplete document sets',         null),
-            Views._kpiCard('Pending Medical',           k.pendingMedical     ?? '--', '🩺',  'orange', 'Awaiting medical docs',            { type:'status', value:'Pending Medical' }),
-            Views._kpiCard('Booked Medical Exam',       k.bookedMedical      ?? '--', '📅',  'blue',   'Medical exam appointment set',     { type:'status', value:'Booked a medical examination' }),
-            Views._kpiCard('Docs Under Preparing',      k.docsUnderPreparing ?? '--', '📝',  'orange', 'Documents being prepared',         { type:'status', value:'Documents Under Preparing' }),
-            Views._kpiCard('Visa Pending',              k.visaPending        ?? '--', '🛂',  'red',    'Awaiting visa issuance',           { type:'status', value:'Visa Pending' }),
-            Views._kpiCard('Visa Completed',            k.visaCompleted      ?? '--', '✅',  'green',  'Visa issued',                      { type:'status', value:'Visa Completed' }),
-            Views._kpiCard('Mobilized',                 k.mobilized          ?? '--', '✈️', 'purple', 'Successfully mobilized',           { type:'status', value:'Mobilized' }),
+            Views._kpiCard('Active Cases', k.activeCount ?? '--', '🏗️', 'blue', 'All non-closed cases', null),
+            Views._kpiCard('Missing Documents', k.missingDocs ?? '--', '❗', 'orange', 'Incomplete document sets', null),
+            Views._kpiCard('Pending Medical', k.pendingMedical ?? '--', '🩺', 'orange', 'Awaiting medical docs', { type: 'status', value: 'Pending Medical' }),
+            Views._kpiCard('Booked Medical Exam', k.bookedMedical ?? '--', '📅', 'blue', 'Medical exam appointment set', { type: 'status', value: 'Booked a medical examination' }),
+            Views._kpiCard('Docs Under Preparing', k.docsUnderPreparing ?? '--', '📝', 'orange', 'Documents being prepared', { type: 'status', value: 'Documents Under Preparing' }),
+            Views._kpiCard('Visa Pending', k.visaPending ?? '--', '🛂', 'red', 'Awaiting visa issuance', { type: 'status', value: 'Visa Pending' }),
+            Views._kpiCard('Visa Completed', k.visaCompleted ?? '--', '✅', 'green', 'Visa issued', { type: 'status', value: 'Visa Completed' }),
+            Views._kpiCard('Mobilized', k.mobilized ?? '--', '✈️', 'purple', 'Successfully mobilized', { type: 'status', value: 'Mobilized' }),
           ].join('');
 
           // ── Section 2: HAS document cards ──────────────────────────────
           document.getElementById('kpi-grid-has').innerHTML = [
-            Views._kpiCard('Has Passport',         k.hasPassport       ?? '--', '🛂',  'green', 'Passport uploaded & valid',      { type:'hasDoc', value:'Passport' }),
-            Views._kpiCard('Has Photo',            k.hasPhoto          ?? '--', '📷',  'green', 'Photo uploaded & valid',         { type:'hasDoc', value:'Photo' }),
-            Views._kpiCard('Has Academic Cert.',   k.hasAcademicCert   ?? '--', '🎓',  'green', 'Academic certificate uploaded',  { type:'hasDoc', value:'Academic Certificate' }),
-            Views._kpiCard('Has Medical Exam',     k.hasMedicalExam    ?? '--', '🩺',  'green', 'Medical examination uploaded',   { type:'hasDoc', value:'Medical Examination' }),
-            Views._kpiCard('Has Medical Analysis', k.hasMedicalAnalysis?? '--', '🧪',  'green', 'Medical analysis uploaded',      { type:'hasDoc', value:'Medical Analysis' }),
-            Views._kpiCard('Has Visa',             k.hasVisa           ?? '--', '🌍',  'green', 'Visa document uploaded',         { type:'hasDoc', value:'Visa' }),
-            Views._kpiCard('Has CV',               k.hasCV             ?? '--', '📄',  'green', 'CV uploaded',                   { type:'hasDoc', value:'CV' }),
+            Views._kpiCard('Has Passport', k.hasPassport ?? '--', '🛂', 'green', 'Passport uploaded & valid', { type: 'hasDoc', value: 'Passport' }),
+            Views._kpiCard('Has Photo', k.hasPhoto ?? '--', '📷', 'green', 'Photo uploaded & valid', { type: 'hasDoc', value: 'Photo' }),
+            Views._kpiCard('Has Academic Cert.', k.hasAcademicCert ?? '--', '🎓', 'green', 'Academic certificate uploaded', { type: 'hasDoc', value: 'Academic Certificate' }),
+            Views._kpiCard('Has Medical Exam', k.hasMedicalExam ?? '--', '🩺', 'green', 'Medical examination uploaded', { type: 'hasDoc', value: 'Medical Examination' }),
+            Views._kpiCard('Has Medical Analysis', k.hasMedicalAnalysis ?? '--', '🧪', 'green', 'Medical analysis uploaded', { type: 'hasDoc', value: 'Medical Analysis' }),
+            Views._kpiCard('Has Visa', k.hasVisa ?? '--', '🌍', 'green', 'Visa document uploaded', { type: 'hasDoc', value: 'Visa' }),
+            Views._kpiCard('Has CV', k.hasCV ?? '--', '📄', 'green', 'CV uploaded', { type: 'hasDoc', value: 'CV' }),
           ].join('');
 
           // ── Section 3: MISSING document cards ──────────────────────────
           document.getElementById('kpi-grid-missing').innerHTML = [
-            Views._kpiCard('Missing Passport',         k.missingPassport        ?? '--', '🛂',  'red',    'No valid passport',              { type:'missingDoc', value:'Passport' }),
-            Views._kpiCard('Missing Photo',            k.missingPhoto           ?? '--', '📷',  'red',    'No valid photo',                 { type:'missingDoc', value:'Photo' }),
-            Views._kpiCard('Missing Academic Cert.',   k.missingAcademicCert    ?? '--', '🎓',  'red',    'No academic certificate',        { type:'missingDoc', value:'Academic Certificate' }),
-            Views._kpiCard('Missing Medical Exam',     k.missingMedicalExam     ?? '--', '🩺',  'red',    'No medical examination',         { type:'missingDoc', value:'Medical Examination' }),
-            Views._kpiCard('Missing Medical Analysis', k.missingMedicalAnalysis ?? '--', '🧪',  'red',    'No medical analysis',            { type:'missingDoc', value:'Medical Analysis' }),
-            Views._kpiCard('Missing Visa',             k.missingVisa            ?? '--', '🌍',  'red',    'No visa document',              { type:'missingDoc', value:'Visa' }),
-            Views._kpiCard('Missing CV',               k.missingCV              ?? '--', '📄',  'red',    'No CV',                         { type:'missingDoc', value:'CV' }),
+            Views._kpiCard('Missing Passport', k.missingPassport ?? '--', '🛂', 'red', 'No valid passport', { type: 'missingDoc', value: 'Passport' }),
+            Views._kpiCard('Missing Photo', k.missingPhoto ?? '--', '📷', 'red', 'No valid photo', { type: 'missingDoc', value: 'Photo' }),
+            Views._kpiCard('Missing Academic Cert.', k.missingAcademicCert ?? '--', '🎓', 'red', 'No academic certificate', { type: 'missingDoc', value: 'Academic Certificate' }),
+            Views._kpiCard('Missing Medical Exam', k.missingMedicalExam ?? '--', '🩺', 'red', 'No medical examination', { type: 'missingDoc', value: 'Medical Examination' }),
+            Views._kpiCard('Missing Medical Analysis', k.missingMedicalAnalysis ?? '--', '🧪', 'red', 'No medical analysis', { type: 'missingDoc', value: 'Medical Analysis' }),
+            Views._kpiCard('Missing Visa', k.missingVisa ?? '--', '🌍', 'red', 'No visa document', { type: 'missingDoc', value: 'Visa' }),
+            Views._kpiCard('Missing CV', k.missingCV ?? '--', '📄', 'red', 'No CV', { type: 'missingDoc', value: 'CV' }),
           ].join('');
-          
+
           // ── Section 4: Calendar cards ──────────────────────────────
           document.getElementById('kpi-grid-calendar').innerHTML = [
-            Views._kpiCard('Upcoming Today',       k.eventsToday        ?? '--', '📅',  'blue',   'Events scheduled for today',      { type:'calendar', value:'Today' }),
-            Views._kpiCard('Upcoming Tomorrow',    k.eventsTomorrow     ?? '--', '📅',  'blue',   'Events scheduled for tomorrow',   { type:'calendar', value:'Tomorrow' }),
-            Views._kpiCard('This Week',            k.eventsThisWeek     ?? '--', '📅',  'purple', 'Events in the next 7 days',       { type:'calendar', value:'ThisWeek' }),
-            Views._kpiCard('Overdue',              k.eventsOverdue      ?? '--', '⚠️', 'red',    'Events past their date',          { type:'calendar', value:'Overdue' }),
-            Views._kpiCard('High Priority',        k.eventsHighPriority ?? '--', '🔥', 'orange', 'Important upcoming events',       { type:'calendar', value:'HighPriority' }),
+            Views._kpiCard('Upcoming Today', k.eventsToday ?? '--', '📅', 'blue', 'Events scheduled for today', { type: 'calendar', value: 'Today' }),
+            Views._kpiCard('Upcoming Tomorrow', k.eventsTomorrow ?? '--', '📅', 'blue', 'Events scheduled for tomorrow', { type: 'calendar', value: 'Tomorrow' }),
+            Views._kpiCard('This Week', k.eventsThisWeek ?? '--', '📅', 'purple', 'Events in the next 7 days', { type: 'calendar', value: 'ThisWeek' }),
+            Views._kpiCard('Overdue', k.eventsOverdue ?? '--', '⚠️', 'red', 'Events past their date', { type: 'calendar', value: 'Overdue' }),
+            Views._kpiCard('High Priority', k.eventsHighPriority ?? '--', '🔥', 'orange', 'Important upcoming events', { type: 'calendar', value: 'HighPriority' }),
           ].join('');
         } else {
           const errMsg = `<div class="form-error" style="grid-column: 1/-1">Failed to load: ${escHtml(kpiRes.error)}</div>`;
@@ -583,9 +577,9 @@
     },
 
     _kpiCard(label, value, icon, color, footer, filter) {
-      const filterAttr  = filter ? `data-filter-type="${filter.type}" data-filter-value="${escHtml(filter.value)}"` : '';
-      const clickable   = filter ? 'kpi-card--clickable' : '';
-      const cardId      = filter ? `id="kpi-card-${filter.type}-${filter.value.replace(/\s+/g,'_')}"` : '';
+      const filterAttr = filter ? `data-filter-type="${filter.type}" data-filter-value="${escHtml(filter.value)}"` : '';
+      const clickable = filter ? 'kpi-card--clickable' : '';
+      const cardId = filter ? `id="kpi-card-${filter.type}-${filter.value.replace(/\s+/g, '_')}"` : '';
       return `
       <div class="kpi-card kpi-card--${color} ${clickable}" ${cardId} ${filterAttr}
            ${filter ? 'onclick="Views._onKpiCardClick(event, this)" tabindex="0" role="button"' : ''}
@@ -599,9 +593,9 @@
     },
 
     _onKpiCardClick(event, cardEl) {
-      const type  = cardEl.dataset.filterType;
+      const type = cardEl.dataset.filterType;
       const value = cardEl.dataset.filterValue;
-      const key   = `${type}::${value}`;
+      const key = `${type}::${value}`;
 
       if (type === 'calendar') {
         Router.navigate('calendar', { filter: value });
@@ -634,7 +628,7 @@
     },
 
     _applyDashboardCardFilter() {
-      const filters  = Array.from(Views._dashboardSelectedCards);
+      const filters = Array.from(Views._dashboardSelectedCards);
       const allCands = App.state.candidates;
 
       if (filters.length === 0) {
@@ -646,9 +640,9 @@
       }
 
       // Parse selected filters
-      const statusFilters     = filters.filter(f => f.startsWith('status::')).map(f => f.replace('status::',''));
-      const hasDocFilters     = filters.filter(f => f.startsWith('hasDoc::')).map(f => f.replace('hasDoc::',''));
-      const missingDocFilters = filters.filter(f => f.startsWith('missingDoc::')).map(f => f.replace('missingDoc::',''));
+      const statusFilters = filters.filter(f => f.startsWith('status::')).map(f => f.replace('status::', ''));
+      const hasDocFilters = filters.filter(f => f.startsWith('hasDoc::')).map(f => f.replace('hasDoc::', ''));
+      const missingDocFilters = filters.filter(f => f.startsWith('missingDoc::')).map(f => f.replace('missingDoc::', ''));
 
       // Build a per-candidate has/missing doc index from docCompleteness cache
       const completeness = App.state.docCompleteness;
@@ -714,13 +708,13 @@
 
       // Animate out → update → animate in
       el.style.transition = 'opacity .18s ease, transform .18s ease';
-      el.style.opacity    = '0';
-      el.style.transform  = 'translateY(6px)';
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(6px)';
 
       setTimeout(() => {
         el.innerHTML = Views._candidateTableHtml(candidates);
         requestAnimationFrame(() => {
-          el.style.opacity   = '1';
+          el.style.opacity = '1';
           el.style.transform = 'translateY(0)';
         });
       }, 180);
@@ -756,7 +750,7 @@
 
     _toggleExportMenu() {
       const menu = document.getElementById('dash-export-menu');
-      const btn  = document.getElementById('dash-export-btn');
+      const btn = document.getElementById('dash-export-btn');
       if (!menu || !btn) return;
       const nowOpen = menu.style.display === 'none';
       menu.style.display = nowOpen ? 'block' : 'none';
@@ -778,38 +772,38 @@
       const menu = document.getElementById('dash-export-menu');
       if (menu) menu.style.display = 'none';
 
-      const _all      = App.state.candidates        || [];
+      const _all = App.state.candidates || [];
       const _filtered = App.state.filteredCandidates || [];
-      const data      = (_filtered.length > 0 && _filtered.length < _all.length)
-                        ? _filtered
-                        : _all;
+      const data = (_filtered.length > 0 && _filtered.length < _all.length)
+        ? _filtered
+        : _all;
       if (!data || !data.length) { Toast.warning('No candidates loaded yet.'); return; }
       const isFiltered = data.length < _all.length;
 
       const { docCompleteness } = App.state;
       const headers = [
-        'CandidateID','FullName','Position','Department',
-        'Email','Phone','Nationality','OfferSalary',
-        'CurrentStatus','CreatedAt','UpdatedAt',
-        'DocCompleteness%','PresentDocs','MissingDocs'
+        'CandidateID', 'FullName', 'Position', 'Department',
+        'Email', 'Phone', 'Nationality', 'OfferSalary',
+        'CurrentStatus', 'CreatedAt', 'UpdatedAt',
+        'DocCompleteness%', 'PresentDocs', 'MissingDocs'
       ];
       const esc = v => '"' + (v || '').toString().replace(/"/g, '""') + '"';
       const rows = data.map(c => {
-        const comp    = docCompleteness[c.CandidateID];
-        const pct     = comp ? comp.pct     : '';
+        const comp = docCompleteness[c.CandidateID];
+        const pct = comp ? comp.pct : '';
         const present = comp ? comp.presentDocs.join('; ') : '';
-        const missing = comp ? comp.missingDocs.join('; ')  : '';
+        const missing = comp ? comp.missingDocs.join('; ') : '';
         return [
-          esc(c.CandidateID), esc(c.FullName),    esc(c.Position),    esc(c.Department),
-          esc(c.Email),        esc(c.Phone),        esc(c.Nationality), esc(c.OfferSalary),
-          esc(c.CurrentStatus),esc(c.CreatedAt),   esc(c.UpdatedAt),
-          esc(pct),            esc(present),        esc(missing)
+          esc(c.CandidateID), esc(c.FullName), esc(c.Position), esc(c.Department),
+          esc(c.Email), esc(c.Phone), esc(c.Nationality), esc(c.OfferSalary),
+          esc(c.CurrentStatus), esc(c.CreatedAt), esc(c.UpdatedAt),
+          esc(pct), esc(present), esc(missing)
         ].join(',');
       });
-      const csv  = '\uFEFF' + [headers.join(',')].concat(rows).join('\n');
+      const csv = '\uFEFF' + [headers.join(',')].concat(rows).join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
       a.href = url;
       a.download = 'HR_Candidates_' + new Date().toISOString().slice(0, 10) + '.csv';
       document.body.appendChild(a);
@@ -833,35 +827,35 @@
       const today = new Date().toLocaleDateString('en-GB');
       const rows = [
         'Category,Metric,Count',
-        'Pipeline,Active Cases,'           + (k.activeCount        || 0),
-        'Pipeline,Missing Documents,'      + (k.missingDocs        || 0),
-        'Pipeline,Pending Medical,'        + (k.pendingMedical     || 0),
-        'Pipeline,Booked Medical Exam,'    + (k.bookedMedical      || 0),
-        'Pipeline,Docs Under Preparing,'   + (k.docsUnderPreparing || 0),
-        'Pipeline,Visa Pending,'           + (k.visaPending        || 0),
-        'Pipeline,Visa Completed,'         + (k.visaCompleted      || 0),
-        'Pipeline,Mobilized,'              + (k.mobilized          || 0),
-        'Has Document,Has Passport,'       + (k.hasPassport        || 0),
-        'Has Document,Has Photo,'          + (k.hasPhoto           || 0),
-        'Has Document,Has Academic Cert.,' + (k.hasAcademicCert    || 0),
-        'Has Document,Has Medical Exam,'   + (k.hasMedicalExam     || 0),
-        'Has Document,Has Med. Analysis,'  + (k.hasMedicalAnalysis || 0),
-        'Has Document,Has Visa,'           + (k.hasVisa            || 0),
-        'Has Document,Has CV,'             + (k.hasCV              || 0),
-        'Missing Document,Missing Passport,'      + (k.missingPassport        || 0),
-        'Missing Document,Missing Photo,'         + (k.missingPhoto           || 0),
-        'Missing Document,Missing Academic Cert.,'+ (k.missingAcademicCert    || 0),
-        'Missing Document,Missing Medical Exam,'  + (k.missingMedicalExam     || 0),
+        'Pipeline,Active Cases,' + (k.activeCount || 0),
+        'Pipeline,Missing Documents,' + (k.missingDocs || 0),
+        'Pipeline,Pending Medical,' + (k.pendingMedical || 0),
+        'Pipeline,Booked Medical Exam,' + (k.bookedMedical || 0),
+        'Pipeline,Docs Under Preparing,' + (k.docsUnderPreparing || 0),
+        'Pipeline,Visa Pending,' + (k.visaPending || 0),
+        'Pipeline,Visa Completed,' + (k.visaCompleted || 0),
+        'Pipeline,Mobilized,' + (k.mobilized || 0),
+        'Has Document,Has Passport,' + (k.hasPassport || 0),
+        'Has Document,Has Photo,' + (k.hasPhoto || 0),
+        'Has Document,Has Academic Cert.,' + (k.hasAcademicCert || 0),
+        'Has Document,Has Medical Exam,' + (k.hasMedicalExam || 0),
+        'Has Document,Has Med. Analysis,' + (k.hasMedicalAnalysis || 0),
+        'Has Document,Has Visa,' + (k.hasVisa || 0),
+        'Has Document,Has CV,' + (k.hasCV || 0),
+        'Missing Document,Missing Passport,' + (k.missingPassport || 0),
+        'Missing Document,Missing Photo,' + (k.missingPhoto || 0),
+        'Missing Document,Missing Academic Cert.,' + (k.missingAcademicCert || 0),
+        'Missing Document,Missing Medical Exam,' + (k.missingMedicalExam || 0),
         'Missing Document,Missing Med. Analysis,' + (k.missingMedicalAnalysis || 0),
-        'Missing Document,Missing Visa,'          + (k.missingVisa            || 0),
-        'Missing Document,Missing CV,'            + (k.missingCV              || 0),
+        'Missing Document,Missing Visa,' + (k.missingVisa || 0),
+        'Missing Document,Missing CV,' + (k.missingCV || 0),
         ',,',
         '"Report Date","' + today + '",'
       ];
-      const csv  = '\uFEFF' + rows.join('\n');
+      const csv = '\uFEFF' + rows.join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
       a.href = url;
       a.download = 'HR_KPI_Summary_' + new Date().toISOString().slice(0, 10) + '.csv';
       document.body.appendChild(a);
@@ -1031,7 +1025,7 @@
             Views._candidateEventDots = Views._buildEventDotsMap(evRes.data);
             Views._renderCandidatesTable(App.state.filteredCandidates);
           }
-        }).catch(() => {});
+        }).catch(() => { });
 
         // Render immediately (completeness cells will show "Loading…" state)
         Views._renderCandidatesTable(res.data);
@@ -1068,8 +1062,8 @@
 
     // ── Combined filter + sort ──
     _filterCandidates() {
-      const query         = (document.getElementById('search-input')?.value || '').toLowerCase();
-      const deptFilter    = document.getElementById('dept-filter')?.value || '';
+      const query = (document.getElementById('search-input')?.value || '').toLowerCase();
+      const deptFilter = document.getElementById('dept-filter')?.value || '';
       const completionMin = parseInt(document.getElementById('completion-min')?.value || '0', 10);
       const { statusFilters, docFilters, docCompleteness, sortCol, sortDir } = App.state;
 
@@ -1110,7 +1104,7 @@
             valB = (b[sortCol] || '').toString().toLowerCase();
           }
           if (valA < valB) return sortDir === 'asc' ? -1 : 1;
-          if (valA > valB) return sortDir === 'asc' ?  1 : -1;
+          if (valA > valB) return sortDir === 'asc' ? 1 : -1;
           return 0;
         });
       }
@@ -1131,9 +1125,9 @@
 
     // ── Quick-filter: toggle a doc type as "missing" ──
     _toggleDocFilter(docType) {
-      const key     = docType.replace(/\s/g, '_');
+      const key = docType.replace(/\s/g, '_');
       const filters = [...App.state.docFilters];
-      const idx     = filters.indexOf(docType);
+      const idx = filters.indexOf(docType);
       if (idx >= 0) filters.splice(idx, 1); else filters.push(docType);
       App.setState({ docFilters: filters });
       // Sync advanced-panel checkbox
@@ -1152,9 +1146,9 @@
 
     // ── Quick-filter: toggle a status ──
     _toggleStatusFilter(status) {
-      const key     = status.replace(/\s/g, '_');
+      const key = status.replace(/\s/g, '_');
       const filters = [...App.state.statusFilters];
-      const idx     = filters.indexOf(status);
+      const idx = filters.indexOf(status);
       if (idx >= 0) filters.splice(idx, 1); else filters.push(status);
       App.setState({ statusFilters: filters });
       const cb = document.getElementById(`sc-${key}`);
@@ -1173,8 +1167,8 @@
     _onStatusCheckChange() {
       const checked = [...document.querySelectorAll('.status-check:checked')].map(el => el.value);
       App.setState({ statusFilters: checked });
-      ['Visa Pending','Visa Completed','Mobilized','Documents Complete'].forEach(st => {
-        const btn = document.getElementById(`qf-status-${st.replace(/\s/g,'_')}`);
+      ['Visa Pending', 'Visa Completed', 'Mobilized', 'Documents Complete'].forEach(st => {
+        const btn = document.getElementById(`qf-status-${st.replace(/\s/g, '_')}`);
         if (btn) {
           btn.classList.toggle('quick-filter-btn--active', checked.includes(st));
           btn.setAttribute('aria-pressed', String(checked.includes(st)));
@@ -1198,8 +1192,8 @@
     _onDocCheckChange() {
       const checked = [...document.querySelectorAll('.doc-check:checked')].map(el => el.value);
       App.setState({ docFilters: checked });
-      ['Passport','Photo','Academic Certificate','Medical','Visa','CV'].forEach(doc => {
-        const btn = document.getElementById(`qf-doc-${doc.replace(/\s/g,'_')}`);
+      ['Passport', 'Photo', 'Academic Certificate', 'Medical', 'Visa', 'CV'].forEach(doc => {
+        const btn = document.getElementById(`qf-doc-${doc.replace(/\s/g, '_')}`);
         if (btn) {
           btn.classList.toggle('quick-filter-btn--active', checked.includes(doc));
           btn.setAttribute('aria-pressed', String(checked.includes(doc)));
@@ -1219,37 +1213,37 @@
 
     // ── Persist all filter state to localStorage ──
     _saveFilterState() {
-      const deptEl  = document.getElementById('dept-filter');
+      const deptEl = document.getElementById('dept-filter');
       const rangeEl = document.getElementById('completion-min');
       const payload = {
-        statusFilters:        App.state.statusFilters,
+        statusFilters: App.state.statusFilters,
         excludeStatusFilters: App.state.excludeStatusFilters,
-        docFilters:           App.state.docFilters,
-        deptFilter:           deptEl  ? deptEl.value  : '',
-        completionMin:        rangeEl ? parseInt(rangeEl.value, 10) : 0,
+        docFilters: App.state.docFilters,
+        deptFilter: deptEl ? deptEl.value : '',
+        completionMin: rangeEl ? parseInt(rangeEl.value, 10) : 0,
       };
-      try { localStorage.setItem('hr_candidate_filters', JSON.stringify(payload)); } catch (_) {}
+      try { localStorage.setItem('hr_candidate_filters', JSON.stringify(payload)); } catch (_) { }
     },
 
     // ── Restore filter state from localStorage and re-apply ──
     _restoreFilterState() {
       let saved;
-      try { saved = JSON.parse(localStorage.getItem('hr_candidate_filters') || 'null'); } catch (_) {}
+      try { saved = JSON.parse(localStorage.getItem('hr_candidate_filters') || 'null'); } catch (_) { }
       if (!saved) return;
 
       // Restore state object
       App.setState({
-        statusFilters:        Array.isArray(saved.statusFilters)        ? saved.statusFilters        : [],
+        statusFilters: Array.isArray(saved.statusFilters) ? saved.statusFilters : [],
         excludeStatusFilters: Array.isArray(saved.excludeStatusFilters) ? saved.excludeStatusFilters : [],
-        docFilters:           Array.isArray(saved.docFilters)           ? saved.docFilters           : [],
+        docFilters: Array.isArray(saved.docFilters) ? saved.docFilters : [],
       });
 
       // Restore Status checkboxes + quick-filter buttons
       document.querySelectorAll('.status-check').forEach(cb => {
         cb.checked = App.state.statusFilters.includes(cb.value);
       });
-      ['Visa Pending','Visa Completed','Mobilized','Documents Complete'].forEach(st => {
-        const btn = document.getElementById(`qf-status-${st.replace(/\s/g,'_')}`);
+      ['Visa Pending', 'Visa Completed', 'Mobilized', 'Documents Complete'].forEach(st => {
+        const btn = document.getElementById(`qf-status-${st.replace(/\s/g, '_')}`);
         if (btn) {
           const on = App.state.statusFilters.includes(st);
           btn.classList.toggle('quick-filter-btn--active', on);
@@ -1266,8 +1260,8 @@
       document.querySelectorAll('.doc-check').forEach(cb => {
         cb.checked = App.state.docFilters.includes(cb.value);
       });
-      ['Passport','Photo','Academic Certificate','Medical Examination','Medical Analysis','Visa','CV'].forEach(doc => {
-        const btn = document.getElementById(`qf-doc-${doc.replace(/\s/g,'_')}`);
+      ['Passport', 'Photo', 'Academic Certificate', 'Medical Examination', 'Medical Analysis', 'Visa', 'CV'].forEach(doc => {
+        const btn = document.getElementById(`qf-doc-${doc.replace(/\s/g, '_')}`);
         if (btn) {
           const on = App.state.docFilters.includes(doc);
           btn.classList.toggle('quick-filter-btn--active', on);
@@ -1280,7 +1274,7 @@
       if (deptEl && saved.deptFilter) deptEl.value = saved.deptFilter;
 
       // Restore Completion % range
-      const rangeEl  = document.getElementById('completion-min');
+      const rangeEl = document.getElementById('completion-min');
       const rangeVal = document.getElementById('completion-min-val');
       if (rangeEl && saved.completionMin != null) {
         rangeEl.value = saved.completionMin;
@@ -1293,7 +1287,7 @@
 
     _toggleAdvancedFilters() {
       const panel = document.getElementById('advanced-filter-panel');
-      const btn   = document.getElementById('adv-filter-btn');
+      const btn = document.getElementById('adv-filter-btn');
       if (!panel || !btn) return;
       const wasHidden = panel.hidden;
       panel.hidden = !wasHidden;
@@ -1317,7 +1311,7 @@
       if (rangeVal) rangeVal.textContent = '0%';
       const searchInput = document.getElementById('search-input');
       if (searchInput) searchInput.value = '';
-      try { localStorage.removeItem('hr_candidate_filters'); } catch (_) {}
+      try { localStorage.removeItem('hr_candidate_filters'); } catch (_) { }
       Views._updateClearButton();
       Views._filterCandidates();
     },
@@ -1343,8 +1337,8 @@
     // ── Sortable column header HTML helper ──
     _thSort(label, col) {
       const { sortCol, sortDir } = App.state;
-      const active   = sortCol === col;
-      const arrow    = active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅';
+      const active = sortCol === col;
+      const arrow = active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅';
       const ariaSort = active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
       return `<th scope="col" class="th--sortable${active ? ' th--sorted' : ''}"
                   onclick="Views._sortBy('${col}')" aria-sort="${ariaSort}">${label}<span class="th-arrow" aria-hidden="true"> ${arrow}</span></th>`;
@@ -1375,14 +1369,14 @@
       const { docCompleteness } = App.state;
 
       const trs = rows.map(c => {
-        const comp        = docCompleteness[c.CandidateID];
-        const pct         = comp?.pct ?? null;
+        const comp = docCompleteness[c.CandidateID];
+        const pct = comp?.pct ?? null;
         const missingDocs = comp?.missingDocs ?? [];
 
         const barColor = pct === null ? 'var(--text-muted)'
-                       : pct === 100  ? 'var(--success)'
-                       : pct >= 50    ? 'var(--primary)'
-                       : 'var(--warning)';
+          : pct === 100 ? 'var(--success)'
+            : pct >= 50 ? 'var(--primary)'
+              : 'var(--warning)';
 
         const completenessCell = pct !== null
           ? `<div class="doc-progress-mini">
@@ -1422,7 +1416,7 @@
           <td style="white-space:nowrap">${fmt.date(c.CreatedAt)}</td>
           <td>
             <button class="btn btn--outline btn--sm"
-                    onclick="Router.navigate('candidate-detail',{selectedCandidateId:${jsq(c.CandidateID)}})"
+                    onclick="Router.navigate('candidate-detail',{selectedCandidate:${JSON.stringify(c).replace(/"/g, '&quot;')}})"
                     aria-label="View ${escHtml(c.FullName)} details">View</button>
           </td>
         </tr>`;
@@ -1450,20 +1444,20 @@
     },
 
     _exportCandidates() {
-      const _all      = App.state.candidates        || [];
+      const _all = App.state.candidates || [];
       const _filtered = App.state.filteredCandidates || [];
 
       // Use filtered list only when it's a real subset (filter is active)
       const data = (_filtered.length > 0 && _filtered.length < _all.length)
-                   ? _filtered
-                   : _all;
+        ? _filtered
+        : _all;
 
       if (!data || !data.length) {
         Toast.warning('No candidates to export.');
         return;
       }
 
-      const isFiltered  = data.length < _all.length;
+      const isFiltered = data.length < _all.length;
       const { docCompleteness } = App.state;
 
       const headers = [
@@ -1476,23 +1470,23 @@
       const esc = v => '"' + (v || '').toString().replace(/"/g, '""') + '"';
 
       const rows = data.map(c => {
-        const comp    = docCompleteness[c.CandidateID];
-        const pct     = comp ? comp.pct                     : '';
-        const present = comp ? comp.presentDocs.join('; ')  : '';
-        const missing = comp ? comp.missingDocs.join('; ')  : '';
+        const comp = docCompleteness[c.CandidateID];
+        const pct = comp ? comp.pct : '';
+        const present = comp ? comp.presentDocs.join('; ') : '';
+        const missing = comp ? comp.missingDocs.join('; ') : '';
         return [
-          esc(c.CandidateID), esc(c.FullName),     esc(c.Position),    esc(c.Department),
-          esc(c.Email),        esc(c.Phone),         esc(c.Nationality), esc(c.OfferSalary),
-          esc(c.CurrentStatus),esc(c.CreatedAt),    esc(c.UpdatedAt),
-          esc(pct),            esc(present),         esc(missing)
+          esc(c.CandidateID), esc(c.FullName), esc(c.Position), esc(c.Department),
+          esc(c.Email), esc(c.Phone), esc(c.Nationality), esc(c.OfferSalary),
+          esc(c.CurrentStatus), esc(c.CreatedAt), esc(c.UpdatedAt),
+          esc(pct), esc(present), esc(missing)
         ].join(',');
       });
 
-      const csv  = '\uFEFF' + [headers.join(',')].concat(rows).join('\n');
+      const csv = '\uFEFF' + [headers.join(',')].concat(rows).join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
       a.download = 'HR_Candidates_' + new Date().toISOString().slice(0, 10) + '.csv';
       document.body.appendChild(a);
       a.click();
@@ -1508,9 +1502,7 @@
 
     // ── CANDIDATE DETAIL ───────────────────────
     candidateDetail(container) {
-      const c = App.state.selectedCandidateId
-        ? (App.state.candidates || []).find(x => x.CandidateID === App.state.selectedCandidateId)
-        : App.state.selectedCandidate;
+      const c = App.state.selectedCandidate;
       if (!c) { Router.navigate('candidates'); return; }
 
       const statusOptions = [
@@ -1538,16 +1530,16 @@
           <p class="page-header__sub">${escHtml(c.Position)} · ${escHtml(c.Department)} · ${statusBadge(c.CurrentStatus)}</p>
         </div>
         <div class="page-header__actions">
-          <button class="btn btn--outline btn--sm" onclick="Views._openEditProfileModal(${jsq(c.CandidateID)})">
+          <button class="btn btn--outline btn--sm" onclick="Views._openEditProfileModal('${escHtml(c.CandidateID)}')">
             ✏️ Edit Profile
           </button>
-          <button class="btn btn--outline btn--sm" onclick="Views._openStatusModal(${jsq(c.CandidateID)},${jsq(c.FullName)})">
+          <button class="btn btn--outline btn--sm" onclick="Views._openStatusModal('${escHtml(c.CandidateID)}','${escHtml(c.FullName)}')">
             🔄 Update Status
           </button>
-          <button class="btn btn--outline btn--sm" onclick="Views._openEventModal(${jsq(c.CandidateID)})">
+          <button class="btn btn--outline btn--sm" onclick="Views._openEventModal('${escHtml(c.CandidateID)}')">
             📅 Add Event
           </button>
-          <button class="btn btn--primary" onclick="Views._openUploadModal(${jsq(c.CandidateID)},${jsq(c.DriveFolderID || '')})">
+          <button class="btn btn--primary" onclick="Views._openUploadModal('${escHtml(c.CandidateID)}','${escHtml(c.DriveFolderID || '')}')">
             📤 Upload Document
           </button>
         </div>
@@ -1635,25 +1627,25 @@
           );
 
           // Determine which required docs are present
-          const presentDocs  = REQUIRED_DOCS.filter(req => uploadedTypes.has(req));
-          const missingDocs  = REQUIRED_DOCS.filter(req => !uploadedTypes.has(req));
+          const presentDocs = REQUIRED_DOCS.filter(req => uploadedTypes.has(req));
+          const missingDocs = REQUIRED_DOCS.filter(req => !uploadedTypes.has(req));
           const completedCount = presentDocs.length;
-          const totalCount     = REQUIRED_DOCS.length;
-          const pct            = Math.round((completedCount / totalCount) * 100);
+          const totalCount = REQUIRED_DOCS.length;
+          const pct = Math.round((completedCount / totalCount) * 100);
 
           // Derive suggested auto-status
           let suggestedStatus = '';
-          if (!uploadedTypes.has('Passport'))                  suggestedStatus = 'Pending Passport';
-          else if (!uploadedTypes.has('Photo'))                suggestedStatus = 'Pending Photo';
+          if (!uploadedTypes.has('Passport')) suggestedStatus = 'Pending Passport';
+          else if (!uploadedTypes.has('Photo')) suggestedStatus = 'Pending Photo';
           else if (!uploadedTypes.has('Academic Certificate')) suggestedStatus = 'Pending Academic Certificate';
-          else if (!uploadedTypes.has('Medical Examination'))  suggestedStatus = 'Booked a medical examination';
-          else if (!uploadedTypes.has('Medical Analysis'))     suggestedStatus = 'Booked a medical examination';
-          else                                                 suggestedStatus = 'Documents Complete';
+          else if (!uploadedTypes.has('Medical Examination')) suggestedStatus = 'Booked a medical examination';
+          else if (!uploadedTypes.has('Medical Analysis')) suggestedStatus = 'Booked a medical examination';
+          else suggestedStatus = 'Documents Complete';
 
           // Determine bar colour
           const barColor = pct === 100 ? 'var(--success)'
-                         : pct >= 50   ? 'var(--primary)'
-                         : 'var(--warning)';
+            : pct >= 50 ? 'var(--primary)'
+              : 'var(--warning)';
 
           completenessEl.innerHTML = `
           <div class="doc-completeness__inner">
@@ -1767,7 +1759,7 @@
       </div>
       <div class="modal__footer">
         <button class="btn btn--outline" onclick="Modal.close()">Cancel</button>
-        <button class="btn btn--primary" onclick="Views._submitStatus(${jsq(candidateId)})">Save Status</button>
+        <button class="btn btn--primary" onclick="Views._submitStatus('${candidateId}')">Save Status</button>
       </div>`);
     },
 
@@ -1814,7 +1806,7 @@
       </div>
       <div class="modal__footer">
         <button class="btn btn--outline" onclick="Modal.close()">Cancel</button>
-        <button class="btn btn--primary" id="edit-save-btn" onclick="Views._submitEditProfile(${jsq(candidateId)})">Save Changes</button>
+        <button class="btn btn--primary" id="edit-save-btn" onclick="Views._submitEditProfile('${candidateId}')">Save Changes</button>
       </div>`);
     },
 
@@ -1890,7 +1882,7 @@
       <div class="modal__footer">
         <button class="btn btn--outline" onclick="Modal.close()">Cancel</button>
         <button class="btn btn--primary" id="upload-btn"
-                onclick="Views._submitUpload(${jsq(candidateId)},${jsq(folderId)})">Upload</button>
+                onclick="Views._submitUpload('${candidateId}','${folderId}')">Upload</button>
       </div>`);
     },
 
@@ -2217,11 +2209,11 @@
           App.setState({ calendarEvents: res.data });
           Views._upcomingCount = res.data.length;
           renderSidebar(); // update badge
-          
+
           document.getElementById('cal-kpi-active').textContent = res.data.length;
-          
+
           Views._renderMonthCalendar();
-          
+
           const initialFilter = App.state.filter || 'All';
           const btn = document.querySelector(`button[data-cal-filter="${initialFilter}"]`);
           Views._applyCalendarFilter(initialFilter, btn);
@@ -2252,40 +2244,40 @@
 
       const all = App.state.calendarEvents || [];
       const today = new Date();
-      today.setHours(0,0,0,0);
+      today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       const nextWeek = new Date(today);
       nextWeek.setDate(nextWeek.getDate() + 7);
 
       let filtered = all;
-      
+
       if (filterName === 'Today') {
         filtered = all.filter(e => {
           const d = new Date(e.EventDate);
           return d.getTime() === today.getTime();
         });
       } else if (filterName === 'Tomorrow') {
-         filtered = all.filter(e => {
+        filtered = all.filter(e => {
           const d = new Date(e.EventDate);
           return d.getTime() === tomorrow.getTime();
         });
       } else if (filterName === 'ThisWeek') {
-         filtered = all.filter(e => {
+        filtered = all.filter(e => {
           const d = new Date(e.EventDate);
           return d >= today && d <= nextWeek;
         });
       } else if (filterName === 'Overdue') {
-         filtered = all.filter(e => {
+        filtered = all.filter(e => {
           const d = new Date(e.EventDate);
           return d < today;
         });
       } else if (filterName === 'HighPriority') {
-         filtered = all.filter(e => e.Priority === 'High');
+        filtered = all.filter(e => e.Priority === 'High');
       }
-      
+
       // Sort chronologically
-      filtered.sort((a,b) => new Date(a.EventDate) - new Date(b.EventDate));
+      filtered.sort((a, b) => new Date(a.EventDate) - new Date(b.EventDate));
 
       Views._renderEventList(filtered, 'calendar-event-list');
     },
@@ -2383,7 +2375,7 @@
       const agendaTitleEl = document.getElementById('calendar-agenda-title');
       if (agendaTitleEl) agendaTitleEl.textContent = 'Upcoming Events';
       const initialFilter = App.state.filter || 'All';
-      const btn = document.querySelector(`button[data-cal-filter="${jsq(initialFilter)}"]`);
+      const btn = document.querySelector(`button[data-cal-filter="${initialFilter}"]`);
       Views._applyCalendarFilter(initialFilter, btn);
     },
 
@@ -2415,7 +2407,7 @@
     _renderEventList(events, containerId, noDataMsg = 'No upcoming events found.') {
       const el = document.getElementById(containerId);
       if (!el) return;
-      
+
       if (events.length === 0) {
         el.innerHTML = `<div class="table-empty"><div class="table-empty__icon">📅</div>${noDataMsg}</div>`;
         return;
@@ -2424,8 +2416,8 @@
       el.innerHTML = events.map(e => {
         const d = new Date(e.EventDate);
         const dateStr = d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
-        const isPast = d < new Date(new Date().setHours(0,0,0,0));
-        
+        const isPast = d < new Date(new Date().setHours(0, 0, 0, 0));
+
         return `
         <div class="event-card">
           <div class="event-card__header">
@@ -2433,7 +2425,7 @@
               <div class="event-card__title">${escHtml(e.Title)} ${isPast && e.Status === 'Active' ? '<span style="color:var(--danger);font-size:.75rem">⚠️ Overdue</span>' : ''}</div>
               <div class="event-card__subtitle">Candidate: <strong>${escHtml(e.CandidateName)}</strong></div>
             </div>
-            <div class="priority-badge priority-badge--${(e.Priority||'medium').toLowerCase()}">${escHtml(e.Priority)}</div>
+            <div class="priority-badge priority-badge--${(e.Priority || 'medium').toLowerCase()}">${escHtml(e.Priority)}</div>
           </div>
           
           <div class="event-card__meta">
@@ -2453,7 +2445,7 @@
           ${e.Description ? `<div style="font-size:.8rem;margin-top:4px;white-space:pre-wrap;color:var(--text-secondary)">${escHtml(e.Description)}</div>` : ''}
           
           <div class="event-card__actions">
-            ${e.Status === 'Active' ? `<button class="btn btn--outline btn--sm" onclick="Views._markEventComplete(${jsq(e.EventID)})">✔️ Mark Completed</button>` : `<span class="event-status event-status--${e.Status.toLowerCase()}">${e.Status}</span>`}
+            ${e.Status === 'Active' ? `<button class="btn btn--outline btn--sm" onclick="Views._markEventComplete('${e.EventID}')">✔️ Mark Completed</button>` : `<span class="event-status event-status--${e.Status.toLowerCase()}">${e.Status}</span>`}
           </div>
         </div>`;
       }).join('');
@@ -2479,7 +2471,7 @@
           <button class="modal__close" onclick="Modal.close()" aria-label="Close">✕</button>
         </div>
         <div class="modal__body">
-          <form id="eventForm" class="form-grid" onsubmit="Views._submitEvent(event, ${jsq(candidateId)})">
+          <form id="eventForm" class="form-grid" onsubmit="Views._submitEvent(event, '${candidateId}')">
             
             <div class="form-group col-span-2">
               <label class="form-label">Event Title <span class="required">*</span></label>
@@ -2521,7 +2513,7 @@
           <button class="btn btn--primary" type="submit" form="eventForm" id="btnSubmitEvent">Schedule Event</button>
         </div>
       `);
-      
+
       // Default to tomorrow
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
@@ -2533,7 +2525,7 @@
       const btn = document.getElementById('btnSubmitEvent');
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Scheduling...';
-      
+
       const payload = {
         title: document.getElementById('evTitle').value,
         eventDate: document.getElementById('evDate').value,
@@ -2542,7 +2534,7 @@
         reminderMinutesBefore: document.getElementById('evReminder').value,
         description: document.getElementById('evDescription').value
       };
-      
+
       try {
         const res = await GAS.call('api_createCalendarEvent', candidateId, payload);
         if (res.success) {
