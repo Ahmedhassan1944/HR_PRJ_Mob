@@ -1,0 +1,2605 @@
+<script>
+  /**
+   * =========================================================
+   * ENTERPRISE HR MOBILIZATION — FRONTEND SPA (Script.html)
+   * =========================================================
+   * Single-Page Application logic:
+   *  - State management
+   *  - Router / view renderer
+   *  - GAS bridge (google.script.run)
+   *  - Views: Dashboard, Candidates, New Candidate, Detail, Audit Log
+   * =========================================================
+   */
+
+  // ─────────────────────────────────────────────
+  // GLOBAL STATE
+  // ─────────────────────────────────────────────
+
+  const App = {
+    state: {
+      currentUser: { name: 'HR Coordinator', role: 'HR_COORDINATOR', email: '' },
+      currentView: 'dashboard',
+      candidates: [],
+      filteredCandidates: [],
+      selectedCandidate: null,
+      filterStatus: 'all',
+      searchQuery: '',
+      loading: false,
+      kpi: { activeCount: 0, missingDocs: 0, visaPending: 0, visaCompleted: 0, mobilized: 0 },
+      // ── Document completeness cache ──────────────────────────
+      // Keyed by CandidateID → { pct, missingDocs, presentDocs }
+      // Populated lazily by _loadAllCompleteness(); UI-only, no DB writes.
+      docCompleteness: {},
+      // ── Candidates table state ───────────────────────────────
+      sortCol: '',           // column key to sort by
+      sortDir: 'asc',        // 'asc' | 'desc'
+      statusFilters: [],        // [] = all; otherwise array of status strings to INCLUDE
+      excludeStatusFilters: [], // [] = none excluded; otherwise statuses to HIDE
+      docFilters: [],           // array of doc-type strings meaning "missing these"
+      sidebarCollapsed: false, // ── Sidebar collapse state ──
+    },
+
+    setState(partial) {
+      Object.assign(this.state, partial);
+    },
+
+    toggleSidebar(forceState) {
+      const isCollapsed = forceState !== undefined ? forceState : !this.state.sidebarCollapsed;
+      this.setState({ sidebarCollapsed: isCollapsed });
+      localStorage.setItem('hr_sidebar_collapsed', isCollapsed);
+      const appEl = document.getElementById('app');
+      if (appEl) {
+        if (isCollapsed) appEl.classList.add('app--collapsed');
+        else appEl.classList.remove('app--collapsed');
+      }
+    },
+
+    toggleDarkMode() {
+      const isDark = document.body.classList.toggle('dark-mode');
+      localStorage.setItem('hr_dark_mode', isDark);
+      const btn = document.getElementById('dark-mode-btn');
+      if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+    },
+
+    _injectDarkBtn() {
+      if (document.getElementById('dark-mode-btn')) return; // already injected
+      const footer = document.querySelector('.sidebar__footer');
+      if (!footer) return;
+      const btn     = document.createElement('button');
+      btn.id        = 'dark-mode-btn';
+      btn.className = 'dark-mode-btn';
+      btn.title     = 'Toggle Dark / Light Mode';
+      btn.setAttribute('aria-label', 'Toggle Dark Mode');
+      btn.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+      btn.onclick     = () => App.toggleDarkMode();
+      footer.insertBefore(btn, footer.firstChild);
+    }
+  };
+
+  // ── Dark Mode: restore saved preference on page load ──
+  if (localStorage.getItem('hr_dark_mode') === 'true') {
+    document.body.classList.add('dark-mode');
+  }
+
+  // ─────────────────────────────────────────────
+  // GAS BRIDGE
+  // ─────────────────────────────────────────────
+
+  const GAS = {
+    isLive: typeof google !== 'undefined' && !!google.script,
+
+    call(fnName, ...args) {
+      return new Promise((resolve, reject) => {
+        if (!this.isLive) {
+          resolve(this._mockData(fnName, ...args));
+          return;
+        }
+        let call = google.script.run
+          .withSuccessHandler((result) => {
+            if (result === null || result === undefined) {
+              reject(new Error(
+                `No response from server for "${fnName}". This can happen right ` +
+                `after a new deployment — try reloading the page.`
+              ));
+              return;
+            }
+            resolve(result);
+          })
+          .withFailureHandler(reject);
+        call[fnName](...args);
+      });
+    },
+
+    // ── Mock data for local / offline preview ──
+    _mockData(fnName, ...args) {
+      const candidates = [
+        { CandidateID: 'c-001', FullName: 'Ahmed Ali',     Position: 'Civil Engineer',   Department: 'Projects',     Email: 'ahmed@test.com',  Nationality: 'Egyptian',  CurrentStatus: 'Pending Passport',             CreatedAt: '2026-06-01T08:00:00Z', DriveFolderID: 'folder-001' },
+        { CandidateID: 'c-002', FullName: 'Sara Mohamed',  Position: 'HR Specialist',    Department: 'HR',           Email: 'sara@test.com',   Nationality: 'Egyptian',  CurrentStatus: 'Pending Photo',                CreatedAt: '2026-06-03T09:00:00Z', DriveFolderID: 'folder-002' },
+        { CandidateID: 'c-003', FullName: 'Omar Khaled',   Position: 'Mech. Engineer',   Department: 'Maintenance',  Email: 'omar@test.com',   Nationality: 'Sudanese',  CurrentStatus: 'Documents Complete',           CreatedAt: '2026-06-05T10:00:00Z', DriveFolderID: 'folder-003' },
+        { CandidateID: 'c-004', FullName: 'Nadia Youssef', Position: 'Accountant',       Department: 'Finance',      Email: 'nadia@test.com',  Nationality: 'Egyptian',  CurrentStatus: 'Mobilized',                    CreatedAt: '2026-05-20T07:00:00Z', DriveFolderID: 'folder-004' },
+        { CandidateID: 'c-005', FullName: 'Khaled Hassan', Position: 'Site Supervisor',  Department: 'Projects',     Email: 'khaled@test.com', Nationality: 'Jordanian', CurrentStatus: 'Visa Pending',                 CreatedAt: '2026-06-10T11:00:00Z', DriveFolderID: 'folder-005' },
+        { CandidateID: 'c-006', FullName: 'Layla Ibrahim', Position: 'Safety Officer',   Department: 'Safety',       Email: 'layla@test.com',  Nationality: 'Egyptian',  CurrentStatus: 'Visa Completed',               CreatedAt: '2026-06-12T09:00:00Z', DriveFolderID: 'folder-006' },
+        { CandidateID: 'c-007', FullName: 'Hassan Nour',   Position: 'QC Inspector',     Department: 'Operations',   Email: 'hassan@test.com', Nationality: 'Sudanese',  CurrentStatus: 'Pending Academic Certificate', CreatedAt: '2026-06-14T08:00:00Z', DriveFolderID: 'folder-007' },
+        { CandidateID: 'c-008', FullName: 'Rania Saleh',   Position: 'Procurement Eng.', Department: 'Operations',   Email: 'rania@test.com',  Nationality: 'Egyptian',  CurrentStatus: 'New Candidate',                CreatedAt: '2026-06-20T10:00:00Z', DriveFolderID: '' },
+      ];
+      const documents = [
+        // ── c-001 Ahmed Ali: Passport✓ Photo(review) Medical(rejected) → 33% missing Photo,Medical,Acad,Visa,CV
+        { DocumentID: 'd-001', CandidateID: 'c-001', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-06-02T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-002', CandidateID: 'c-001', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-02T08:30:00Z', ApprovalStatus: 'Pending Review', ApprovedBy: '',               VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-003', CandidateID: 'c-001', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-06-02T09:00:00Z', ApprovalStatus: 'Rejected',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: 'Illegible scan' },
+        { DocumentID: 'd-003b', CandidateID: 'c-001', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-02T09:00:00Z', ApprovalStatus: 'Rejected',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: 'Illegible scan' },
+        // ── c-002 Sara Mohamed: Photo only → 17% missing Passport,Acad,Medical,Visa,CV
+        { DocumentID: 'd-010', CandidateID: 'c-002', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-04T08:00:00Z', ApprovalStatus: 'Pending Review', ApprovedBy: '',               VersionNumber: 1, Remarks: '' },
+        // ── c-003 Omar Khaled: All 6 docs approved → 100%
+        { DocumentID: 'd-004', CandidateID: 'c-003', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-06-06T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-005', CandidateID: 'c-003', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-06T08:30:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-006', CandidateID: 'c-003', DocType: 'Academic Certificate', FileName: 'degree.pdf',    FileURL: '#', UploadDate: '2026-06-06T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-007', CandidateID: 'c-003', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-06-06T09:30:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-007b', CandidateID: 'c-003', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-06T09:30:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-008', CandidateID: 'c-003', DocType: 'Visa',                 FileName: 'visa.pdf',      FileURL: '#', UploadDate: '2026-06-07T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-009', CandidateID: 'c-003', DocType: 'CV',                   FileName: 'cv.pdf',        FileURL: '#', UploadDate: '2026-06-07T08:30:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        // ── c-004 Nadia Youssef: All 6 approved (Mobilized) → 100%
+        { DocumentID: 'd-011', CandidateID: 'c-004', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-05-21T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-012', CandidateID: 'c-004', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-05-21T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-013', CandidateID: 'c-004', DocType: 'Academic Certificate', FileName: 'degree.pdf',    FileURL: '#', UploadDate: '2026-05-22T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-014', CandidateID: 'c-004', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-05-22T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-014b', CandidateID: 'c-004', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-05-22T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-015', CandidateID: 'c-004', DocType: 'Visa',                 FileName: 'visa.pdf',      FileURL: '#', UploadDate: '2026-05-23T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-016', CandidateID: 'c-004', DocType: 'CV',                   FileName: 'cv.pdf',        FileURL: '#', UploadDate: '2026-05-23T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        // ── c-005 Khaled Hassan: Passport,Photo,Acad,Medical → 67% missing Visa,CV
+        { DocumentID: 'd-017', CandidateID: 'c-005', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-06-11T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-018', CandidateID: 'c-005', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-11T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-019', CandidateID: 'c-005', DocType: 'Academic Certificate', FileName: 'degree.pdf',    FileURL: '#', UploadDate: '2026-06-11T10:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-020', CandidateID: 'c-005', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-06-11T11:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-020b', CandidateID: 'c-005', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-11T11:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        // ── c-006 Layla Ibrahim: Passport,Photo,Acad,Medical,Visa → 83% missing CV
+        { DocumentID: 'd-021', CandidateID: 'c-006', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-06-13T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-022', CandidateID: 'c-006', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-13T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-023', CandidateID: 'c-006', DocType: 'Academic Certificate', FileName: 'degree.pdf',    FileURL: '#', UploadDate: '2026-06-13T10:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-024', CandidateID: 'c-006', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-06-13T11:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-024b', CandidateID: 'c-006', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-13T11:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-025', CandidateID: 'c-006', DocType: 'Visa',                 FileName: 'visa.pdf',      FileURL: '#', UploadDate: '2026-06-14T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        // ── c-007 Hassan Nour: Passport,Photo,Medical → 50% missing Acad,Visa,CV
+        { DocumentID: 'd-026', CandidateID: 'c-007', DocType: 'Passport',             FileName: 'passport.pdf',  FileURL: '#', UploadDate: '2026-06-15T08:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-027', CandidateID: 'c-007', DocType: 'Photo',                FileName: 'photo.jpg',     FileURL: '#', UploadDate: '2026-06-15T09:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-028', CandidateID: 'c-007', DocType: 'Medical Examination',  FileName: 'med_exam.pdf',   FileURL: '#', UploadDate: '2026-06-15T10:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        { DocumentID: 'd-028b', CandidateID: 'c-007', DocType: 'Medical Analysis',    FileName: 'med_analysis.pdf', FileURL: '#', UploadDate: '2026-06-15T10:00:00Z', ApprovalStatus: 'Approved',       ApprovedBy: 'hr@company.com', VersionNumber: 1, Remarks: '' },
+        // ── c-008 Rania Saleh: No docs yet → 0%
+      ];
+      const logs = [
+        { LogID: 'l-1', Timestamp: '2026-06-01T08:00:00Z', CandidateID: 'c-001', Actor: 'SYSTEM', Event: 'Candidate Created: Ahmed Ali' },
+        { LogID: 'l-2', Timestamp: '2026-06-01T09:00:00Z', CandidateID: 'c-001', Actor: 'SYSTEM', Event: 'Drive Folder Created' },
+        { LogID: 'l-3', Timestamp: '2026-06-02T08:05:00Z', CandidateID: 'c-001', Actor: 'ahmed@test.com', Event: 'Document Uploaded: Passport' },
+        { LogID: 'l-4', Timestamp: '2026-06-03T10:00:00Z', CandidateID: 'c-001', Actor: 'hr@company.com', Event: 'Document Approved: Passport' },
+      ];
+
+      if (fnName === 'api_getDashboardData') return {
+        success: true,
+        data: {
+          // Status-based
+          activeCount: 24, missingDocs: 9, visaPending: 6, visaCompleted: 4, mobilized: 8,
+          pendingMedical: 3, bookedMedical: 2, docsUnderPreparing: 4,
+          // Has counts
+          hasPassport: 18, hasPhoto: 14, hasAcademicCert: 12,
+          hasMedicalExam: 10, hasMedicalAnalysis: 8, hasVisa: 6, hasCV: 15,
+          // Missing counts
+          missingPassport: 6, missingPhoto: 10, missingAcademicCert: 12,
+          missingMedicalExam: 14, missingMedicalAnalysis: 16, missingVisa: 18, missingCV: 9,
+        }
+      };
+      if (fnName === 'api_getAllDocuments') return { success: true, data: documents };
+      if (fnName === 'api_getAllCandidates') return { success: true, data: candidates };
+      if (fnName === 'api_createCandidate') return { success: true, candidateId: 'new-' + Date.now() };
+      if (fnName === 'api_updateCandidateStatus') return { success: true };
+      if (fnName === 'api_updateCandidateDetails') return { success: true };
+      if (fnName === 'api_getDocumentsByCandidate') return { success: true, data: documents.filter(d => d.CandidateID === args[0]) };
+      if (fnName === 'api_reviewDocument') return { success: true };
+      if (fnName === 'api_getAuditLog') return { success: true, data: logs.filter(l => l.CandidateID === args[0]) };
+      if (fnName === 'api_createCandidateFolder') return { success: true, folderId: 'mock-folder', url: '#' };
+      if (fnName === 'api_uploadFileToDrive') return { success: true, fileUrl: '#', documentId: 'mock-doc-id' };
+      if (fnName === 'api_sendRejectionEmail') return { success: true };
+      if (fnName === 'api_sendWelcomeEmail') return { success: true };
+      if (fnName === 'api_getAllUpcomingEvents') return { success: true, data: [] };
+      if (fnName === 'api_getEventsByCandidate') return { success: true, data: [] };
+      if (fnName === 'api_createCalendarEvent') return { success: true, eventId: 'ev-' + Date.now(), calendarEventId: 'cal-' + Date.now(), calendarLink: '#' };
+      if (fnName === 'api_updateCalendarEvent') return { success: true };
+      if (fnName === 'api_deleteCalendarEvent') return { success: true };
+      if (fnName === 'api_markEventCompleted') return { success: true };
+      return { success: true };
+    }
+  };
+
+  // ─────────────────────────────────────────────
+  // TOAST NOTIFICATIONS
+  // ─────────────────────────────────────────────
+
+  const Toast = {
+    show(message, type = 'default', duration = 3500) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast--${type}`;
+      const icons = { success: '✅', error: '❌', warning: '⚠️', default: 'ℹ️' };
+      toast.innerHTML = `<span>${icons[type] || icons.default}</span><span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), duration);
+    },
+    success(msg) { this.show(msg, 'success'); },
+    error(msg) { this.show(msg, 'error'); },
+    warning(msg) { this.show(msg, 'warning'); }
+  };
+
+  // ─────────────────────────────────────────────
+  // MODAL HELPER
+  // ─────────────────────────────────────────────
+
+  const Modal = {
+    open(html) {
+      const root = document.getElementById('modal-root');
+      root.innerHTML = `
+      <div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true">
+        <div class="modal">${html}</div>
+      </div>`;
+      requestAnimationFrame(() => document.getElementById('modal-overlay').classList.add('open'));
+      document.getElementById('modal-overlay').addEventListener('click', e => {
+        if (e.target.id === 'modal-overlay') Modal.close();
+      });
+    },
+    close() {
+      const overlay = document.getElementById('modal-overlay');
+      if (!overlay) return;
+      overlay.classList.remove('open');
+      setTimeout(() => { document.getElementById('modal-root').innerHTML = ''; }, 250);
+    }
+  };
+
+  // ─────────────────────────────────────────────
+  // UTILITY HELPERS
+  // ─────────────────────────────────────────────
+
+  const fmt = {
+    date(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
+      catch (_) { return iso; }
+    },
+    dateTime(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+      catch (_) { return iso; }
+    },
+    initials(name) {
+      return (name || '').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+    }
+  };
+
+  const statusBadge = (status) => {
+    const map = {
+      // ── Legacy statuses (backward-compatible) ──
+      'Documents Requested':           'pending',
+      'documents requested':           'pending',
+      'Pending Validation':            'review',
+      'pending validation':            'review',
+      'Pending Review':                'review',
+      'Approved':                      'approved',
+      'Approved – Medical':            'approved',
+      'Rejected':                      'rejected',
+      'Closed':                        'closed',
+      // ── New lifecycle statuses ──
+      'New Candidate':                 'new',
+      'Pending Passport':              'pending',
+      'Pending Photo':                 'pending',
+      'Pending Academic Certificate':  'pending',
+      'Pending Medical':               'pending',
+      'Documents Complete':            'docs-complete',
+      'Visa Pending':                  'visa-pending',
+      'Visa Completed':                'visa-completed',
+      'Mobilized':                     'mobilized',
+      'Booked a medical examination':  'review',
+      'Documents Under Preparing':    'pending',
+    };
+    const cls = map[status] || 'pending';
+    return `<span class="badge badge--${cls}">${status || 'Unknown'}</span>`;
+  };
+
+  const escHtml = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // ─────────────────────────────────────────────
+  // DOCUMENT COMPLETENESS — SHARED CONSTANTS
+  // Single source of truth, reused by both the
+  // Candidate Detail view and the batch-fetch
+  // in the Candidates list view.
+  // ─────────────────────────────────────────────
+
+  const REQUIRED_DOCS = ['Passport', 'Photo', 'Academic Certificate', 'Medical Examination', 'Medical Analysis', 'Visa', 'CV'];
+
+  /**
+   * Compute document completeness from a flat array of document objects.
+   * Mirrors the exact logic already in _loadCandidateDocuments — no duplication.
+   * @param {Object[]} docs - raw document records from api_getDocumentsByCandidate
+   * @returns {{ pct:number, missingDocs:string[], presentDocs:string[] }}
+   */
+  const computeCompleteness = (docs) => {
+    const uploadedTypes = new Set(
+      (docs || [])
+        .filter(d => d.ApprovalStatus !== 'Rejected')
+        .map(d => (d.DocType || '').trim())
+    );
+    const presentDocs = REQUIRED_DOCS.filter(req => uploadedTypes.has(req));
+    const missingDocs = REQUIRED_DOCS.filter(req => !uploadedTypes.has(req));
+    const pct         = Math.round((presentDocs.length / REQUIRED_DOCS.length) * 100);
+    return { pct, missingDocs, presentDocs };
+  };
+
+  // ─────────────────────────────────────────────
+  // ROUTER
+  // ─────────────────────────────────────────────
+
+  const Router = {
+    navigate(view, params = {}) {
+      App.setState({ currentView: view, ...params });
+      renderSidebar();
+      renderView();
+      document.getElementById('app-view')?.focus();
+    }
+  };
+
+  // ─────────────────────────────────────────────
+  // TOPBAR RENDERER
+  // ─────────────────────────────────────────────
+
+  const renderTopbar = () => {
+    const { name, role } = App.state.currentUser;
+    document.getElementById('topbar').innerHTML = `
+    <div class="topbar__brand">
+      <div class="topbar__brand-icon" aria-hidden="true">HR</div>
+      <span>HR Mobilization System</span>
+    </div>
+    <div class="topbar__right">
+      <button class="notification-btn" id="notif-btn" aria-label="Notifications">
+        🔔
+        <span class="notification-btn__dot" aria-hidden="true"></span>
+      </button>
+      <div class="topbar__user" tabindex="0" role="button" aria-label="User profile">
+        <div class="topbar__avatar" aria-hidden="true">${fmt.initials(name)}</div>
+        <div>
+          <div class="topbar__username">${escHtml(name)}</div>
+          <div class="topbar__role-badge">${escHtml(role)}</div>
+        </div>
+      </div>
+    </div>`;
+  };
+
+  // ─────────────────────────────────────────────
+  // SIDEBAR RENDERER
+  // ─────────────────────────────────────────────
+
+  const sidebar_items = [
+    { view: 'dashboard', icon: '📊', label: 'Dashboard' },
+    { view: 'candidates', icon: '👥', label: 'Candidates', badge: () => App.state.candidates.filter(c => c.CurrentStatus === 'Documents Requested').length || '' },
+    { view: 'calendar', icon: '📅', label: 'Calendar', badge: () => (App.state.calendarEvents || []).filter(e => e.Status === 'Active').length || '' },
+    { view: 'audit', icon: '📋', label: 'Audit Log' },
+  ];
+
+  const renderSidebar = () => {
+    const current = App.state.currentView;
+    const items = sidebar_items.map(item => {
+      const badge = item.badge ? item.badge() : '';
+      const badgeHtml = badge ? `<span class="nav__badge" aria-label="${badge} items">${badge}</span>` : '';
+      return `
+      <div class="nav__item ${current === item.view ? 'active' : ''}"
+           role="button" tabindex="0" data-label="${item.label}"
+           aria-current="${current === item.view ? 'page' : 'false'}"
+           onclick="Router.navigate('${item.view}')"
+           onkeydown="if(event.key==='Enter')Router.navigate('${item.view}')">
+        <span class="nav__item-icon" aria-hidden="true">${item.icon}</span>
+        <span>${item.label}</span>
+        ${badgeHtml}
+      </div>`;
+    }).join('');
+
+    document.getElementById('sidebar').innerHTML = `
+    <div class="sidebar__toggle" onclick="App.toggleSidebar()" role="button" tabindex="0" aria-label="Toggle Sidebar">
+      <span aria-hidden="true">☰</span>
+    </div>
+    <div class="sidebar__section-label">Main Menu</div>
+    ${items}
+    <div class="sidebar__footer">
+      Enterprise HR System v2.0<br>
+      &copy; 2026
+    </div>`;
+  App._injectDarkBtn();
+  };
+
+  // ─────────────────────────────────────────────
+  // VIEW DISPATCHER
+  // ─────────────────────────────────────────────
+
+  const renderView = () => {
+    const view = document.getElementById('app-view');
+    const { currentView } = App.state;
+    if (currentView === 'dashboard') Views.dashboard(view);
+    else if (currentView === 'candidates') Views.candidates(view);
+    else if (currentView === 'candidate-detail') Views.candidateDetail(view);
+    else if (currentView === 'new-candidate') Views.newCandidate(view);
+    else if (currentView === 'calendar') Views.calendar(view);
+    else if (currentView === 'audit') Views.auditLog(view);
+    else view.innerHTML = '<div class="loading-overlay">404 — View not found.</div>';
+  };
+
+  // ─────────────────────────────────────────────
+  // VIEWS
+  // ─────────────────────────────────────────────
+
+  const Views = {
+
+    // ── DASHBOARD ──────────────────────────────
+    dashboard(container) {
+      container.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 class="page-header__title">Dashboard</h1>
+          <p class="page-header__sub">Live overview of all mobilization cases — ${fmt.date(new Date().toISOString())}</p>
+        </div>
+        <div class="page-header__actions">
+          <button class="btn btn--outline btn--sm" onclick="Views._refreshDashboard()" aria-label="Refresh dashboard">
+            🔄 Refresh
+          </button>
+          <button class="btn btn--primary btn--sm" onclick="Router.navigate('new-candidate')">
+            ＋ New Candidate
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI SECTIONS -->
+      <div class="kpi-section-label">📊 Pipeline Overview</div>
+      <div class="kpi-grid" id="kpi-grid-status">
+        ${[1,2,3,4,5,6,7,8].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
+      </div>
+
+      <div class="kpi-section-label" style="margin-top:var(--sp-5)">✅ Candidates WITH Document</div>
+      <div class="kpi-grid" id="kpi-grid-has">
+        ${[1,2,3,4,5,6,7].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
+      </div>
+
+      <div class="kpi-section-label" style="margin-top:var(--sp-5)">❌ Candidates MISSING Document</div>
+      <div class="kpi-grid" id="kpi-grid-missing">
+        ${[1,2,3,4,5,6,7].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
+      </div>
+
+      <div class="kpi-section-label" style="margin-top:var(--sp-5)">📅 Follow-up Calendar</div>
+      <div class="kpi-grid" id="kpi-grid-calendar">
+        ${[1,2,3,4,5].map(() => `<div class="kpi-card"><div class="skeleton" style="height:80px"></div></div>`).join('')}
+      </div>
+
+      <!-- HINT BAR -->
+      <div id="dashboard-filter-hint" style="display:none;margin:var(--sp-3) 0;padding:var(--sp-2) var(--sp-4);
+           background:var(--primary-light);border-radius:var(--radius);color:var(--primary-dark);font-size:.85rem">
+        🔍 Showing filtered candidates — <strong id="dashboard-filter-label"></strong>
+        <button onclick="Views._clearDashboardFilter()" style="margin-left:var(--sp-3);
+        background:none;border:none;cursor:pointer;color:var(--primary-dark);font-weight:700">✕ Clear</button>
+        <span style="margin-left:var(--sp-2);font-size:.78rem;opacity:.7">(CTRL+Click cards to multi-select)</span>
+      </div>
+
+      <!-- ALL CANDIDATES TABLE -->
+      <div class="table-card" style="margin-top:var(--sp-4)">
+        <div class="table-toolbar">
+          <span class="table-toolbar__title" id="dashboard-cands-count">All Candidates</span>
+          <button class="btn btn--outline btn--sm" onclick="Router.navigate('candidates')">Open Full View →</button>
+        </div>
+        <div id="dashboard-table">
+          <div class="loading-overlay"><div class="spinner spinner--dark"></div>Loading…</div>
+        </div>
+      </div>`;
+
+      // Track selected card filters
+      Views._dashboardSelectedCards = new Set();
+      Views._refreshDashboard();
+    },
+
+    async _refreshDashboard() {
+      // State for multi-select card filtering
+      if (!Views._dashboardSelectedCards) Views._dashboardSelectedCards = new Set();
+
+      try {
+        const [kpiRes, candsRes, eventsRes] = await Promise.all([
+          GAS.call('api_getDashboardData'),
+          GAS.call('api_getAllCandidates'),
+          GAS.call('api_getAllUpcomingEvents')
+        ]);
+
+        if (eventsRes.success) {
+          Views._candidateEventDots = Views._buildEventDotsMap(eventsRes.data);
+        }
+
+        if (kpiRes.success) {
+          const k = kpiRes.data;
+          Views._kpiData = k;
+          Views._injectExportButton();
+
+          // ── Section 1: Status-based cards ──────────────────────────────
+          document.getElementById('kpi-grid-status').innerHTML = [
+            Views._kpiCard('Active Cases',              k.activeCount        ?? '--', '🏗️',  'blue',   'All non-closed cases',            null),
+            Views._kpiCard('Missing Documents',         k.missingDocs        ?? '--', '❗',   'orange', 'Incomplete document sets',         null),
+            Views._kpiCard('Pending Medical',           k.pendingMedical     ?? '--', '🩺',  'orange', 'Awaiting medical docs',            { type:'status', value:'Pending Medical' }),
+            Views._kpiCard('Booked Medical Exam',       k.bookedMedical      ?? '--', '📅',  'blue',   'Medical exam appointment set',     { type:'status', value:'Booked a medical examination' }),
+            Views._kpiCard('Docs Under Preparing',      k.docsUnderPreparing ?? '--', '📝',  'orange', 'Documents being prepared',         { type:'status', value:'Documents Under Preparing' }),
+            Views._kpiCard('Visa Pending',              k.visaPending        ?? '--', '🛂',  'red',    'Awaiting visa issuance',           { type:'status', value:'Visa Pending' }),
+            Views._kpiCard('Visa Completed',            k.visaCompleted      ?? '--', '✅',  'green',  'Visa issued',                      { type:'status', value:'Visa Completed' }),
+            Views._kpiCard('Mobilized',                 k.mobilized          ?? '--', '✈️', 'purple', 'Successfully mobilized',           { type:'status', value:'Mobilized' }),
+          ].join('');
+
+          // ── Section 2: HAS document cards ──────────────────────────────
+          document.getElementById('kpi-grid-has').innerHTML = [
+            Views._kpiCard('Has Passport',         k.hasPassport       ?? '--', '🛂',  'green', 'Passport uploaded & valid',      { type:'hasDoc', value:'Passport' }),
+            Views._kpiCard('Has Photo',            k.hasPhoto          ?? '--', '📷',  'green', 'Photo uploaded & valid',         { type:'hasDoc', value:'Photo' }),
+            Views._kpiCard('Has Academic Cert.',   k.hasAcademicCert   ?? '--', '🎓',  'green', 'Academic certificate uploaded',  { type:'hasDoc', value:'Academic Certificate' }),
+            Views._kpiCard('Has Medical Exam',     k.hasMedicalExam    ?? '--', '🩺',  'green', 'Medical examination uploaded',   { type:'hasDoc', value:'Medical Examination' }),
+            Views._kpiCard('Has Medical Analysis', k.hasMedicalAnalysis?? '--', '🧪',  'green', 'Medical analysis uploaded',      { type:'hasDoc', value:'Medical Analysis' }),
+            Views._kpiCard('Has Visa',             k.hasVisa           ?? '--', '🌍',  'green', 'Visa document uploaded',         { type:'hasDoc', value:'Visa' }),
+            Views._kpiCard('Has CV',               k.hasCV             ?? '--', '📄',  'green', 'CV uploaded',                   { type:'hasDoc', value:'CV' }),
+          ].join('');
+
+          // ── Section 3: MISSING document cards ──────────────────────────
+          document.getElementById('kpi-grid-missing').innerHTML = [
+            Views._kpiCard('Missing Passport',         k.missingPassport        ?? '--', '🛂',  'red',    'No valid passport',              { type:'missingDoc', value:'Passport' }),
+            Views._kpiCard('Missing Photo',            k.missingPhoto           ?? '--', '📷',  'red',    'No valid photo',                 { type:'missingDoc', value:'Photo' }),
+            Views._kpiCard('Missing Academic Cert.',   k.missingAcademicCert    ?? '--', '🎓',  'red',    'No academic certificate',        { type:'missingDoc', value:'Academic Certificate' }),
+            Views._kpiCard('Missing Medical Exam',     k.missingMedicalExam     ?? '--', '🩺',  'red',    'No medical examination',         { type:'missingDoc', value:'Medical Examination' }),
+            Views._kpiCard('Missing Medical Analysis', k.missingMedicalAnalysis ?? '--', '🧪',  'red',    'No medical analysis',            { type:'missingDoc', value:'Medical Analysis' }),
+            Views._kpiCard('Missing Visa',             k.missingVisa            ?? '--', '🌍',  'red',    'No visa document',              { type:'missingDoc', value:'Visa' }),
+            Views._kpiCard('Missing CV',               k.missingCV              ?? '--', '📄',  'red',    'No CV',                         { type:'missingDoc', value:'CV' }),
+          ].join('');
+          
+          // ── Section 4: Calendar cards ──────────────────────────────
+          document.getElementById('kpi-grid-calendar').innerHTML = [
+            Views._kpiCard('Upcoming Today',       k.eventsToday        ?? '--', '📅',  'blue',   'Events scheduled for today',      { type:'calendar', value:'Today' }),
+            Views._kpiCard('Upcoming Tomorrow',    k.eventsTomorrow     ?? '--', '📅',  'blue',   'Events scheduled for tomorrow',   { type:'calendar', value:'Tomorrow' }),
+            Views._kpiCard('This Week',            k.eventsThisWeek     ?? '--', '📅',  'purple', 'Events in the next 7 days',       { type:'calendar', value:'ThisWeek' }),
+            Views._kpiCard('Overdue',              k.eventsOverdue      ?? '--', '⚠️', 'red',    'Events past their date',          { type:'calendar', value:'Overdue' }),
+            Views._kpiCard('High Priority',        k.eventsHighPriority ?? '--', '🔥', 'orange', 'Important upcoming events',       { type:'calendar', value:'HighPriority' }),
+          ].join('');
+        } else {
+          const errMsg = `<div class="form-error" style="grid-column: 1/-1">Failed to load: ${escHtml(kpiRes.error)}</div>`;
+          document.getElementById('kpi-grid-status').innerHTML = errMsg;
+          document.getElementById('kpi-grid-has').innerHTML = errMsg;
+          document.getElementById('kpi-grid-missing').innerHTML = errMsg;
+          document.getElementById('kpi-grid-calendar').innerHTML = errMsg;
+        }
+
+        if (candsRes.success) {
+          App.setState({ candidates: candsRes.data, filteredCandidates: candsRes.data });
+          Views._renderDashboardTable(candsRes.data);
+        }
+      } catch (err) {
+        Toast.error('Failed to load dashboard data.');
+        console.error(err);
+      }
+    },
+
+    _kpiCard(label, value, icon, color, footer, filter) {
+      const filterAttr  = filter ? `data-filter-type="${filter.type}" data-filter-value="${escHtml(filter.value)}"` : '';
+      const clickable   = filter ? 'kpi-card--clickable' : '';
+      const cardId      = filter ? `id="kpi-card-${filter.type}-${filter.value.replace(/\s+/g,'_')}"` : '';
+      return `
+      <div class="kpi-card kpi-card--${color} ${clickable}" ${cardId} ${filterAttr}
+           ${filter ? 'onclick="Views._onKpiCardClick(event, this)" tabindex="0" role="button"' : ''}
+           title="${filter ? 'Click to filter · CTRL+Click to multi-select' : ''}">
+        <div class="kpi-card__label">${label}</div>
+        <div class="kpi-card__value">${value}</div>
+        <div class="kpi-card__footer">${footer}</div>
+        <div class="kpi-card__icon" aria-hidden="true">${icon}</div>
+        ${filter ? '<div class="kpi-card__selected-ring" aria-hidden="true"></div>' : ''}
+      </div>`;
+    },
+
+    _onKpiCardClick(event, cardEl) {
+      const type  = cardEl.dataset.filterType;
+      const value = cardEl.dataset.filterValue;
+      const key   = `${type}::${value}`;
+
+      if (type === 'calendar') {
+        Router.navigate('calendar', { filter: value });
+        return;
+      }
+
+      if (event.ctrlKey || event.metaKey) {
+        // CTRL+Click → toggle this card in the multi-select set
+        if (Views._dashboardSelectedCards.has(key)) {
+          Views._dashboardSelectedCards.delete(key);
+          cardEl.classList.remove('kpi-card--selected');
+        } else {
+          Views._dashboardSelectedCards.add(key);
+          cardEl.classList.add('kpi-card--selected');
+        }
+      } else {
+        // Normal click → single select (deselect all others first)
+        document.querySelectorAll('.kpi-card--selected').forEach(el => el.classList.remove('kpi-card--selected'));
+        if (Views._dashboardSelectedCards.has(key) && Views._dashboardSelectedCards.size === 1) {
+          // Clicking the already-selected card alone → clear filter
+          Views._dashboardSelectedCards.clear();
+        } else {
+          Views._dashboardSelectedCards.clear();
+          Views._dashboardSelectedCards.add(key);
+          cardEl.classList.add('kpi-card--selected');
+        }
+      }
+
+      Views._applyDashboardCardFilter();
+    },
+
+    _applyDashboardCardFilter() {
+      const filters  = Array.from(Views._dashboardSelectedCards);
+      const allCands = App.state.candidates;
+
+      if (filters.length === 0) {
+        // No cards selected → show all
+        App.setState({ filteredCandidates: allCands });
+        Views._renderDashboardTable(allCands);
+        document.getElementById('dashboard-filter-hint').style.display = 'none';
+        return;
+      }
+
+      // Parse selected filters
+      const statusFilters     = filters.filter(f => f.startsWith('status::')).map(f => f.replace('status::',''));
+      const hasDocFilters     = filters.filter(f => f.startsWith('hasDoc::')).map(f => f.replace('hasDoc::',''));
+      const missingDocFilters = filters.filter(f => f.startsWith('missingDoc::')).map(f => f.replace('missingDoc::',''));
+
+      // Build a per-candidate has/missing doc index from docCompleteness cache
+      const completeness = App.state.docCompleteness;
+
+      const filtered = allCands.filter(c => {
+        // Status filter check (OR within status group)
+        if (statusFilters.length > 0 && !statusFilters.includes((c.CurrentStatus || '').trim())) return false;
+
+        // hasDoc filter check (candidate must have ALL selected hasDoc types)
+        if (hasDocFilters.length > 0) {
+          const info = completeness[c.CandidateID];
+          if (!info) return false;
+          if (!hasDocFilters.every(dt => info.presentDocs.includes(dt))) return false;
+        }
+
+        // missingDoc filter check (candidate must be missing ALL selected doc types)
+        if (missingDocFilters.length > 0) {
+          const info = completeness[c.CandidateID];
+          if (!info) return false;
+          if (!missingDocFilters.every(dt => info.missingDocs.includes(dt))) return false;
+        }
+
+        return true;
+      });
+
+      // Update hint bar
+      const labels = filters.map(f => {
+        const [type, val] = f.split('::');
+        return type === 'status' ? `Status: ${val}` : type === 'hasDoc' ? `Has: ${val}` : `Missing: ${val}`;
+      }).join(' + ');
+
+      document.getElementById('dashboard-filter-label').textContent = labels;
+      document.getElementById('dashboard-filter-hint').style.display = 'flex';
+      document.getElementById('dashboard-filter-hint').style.alignItems = 'center';
+      document.getElementById('dashboard-filter-hint').style.gap = '4px';
+
+      App.setState({ filteredCandidates: filtered });
+      Views._renderDashboardTable(filtered);
+
+      // Also pre-fetch completeness if not yet loaded (needed for hasDoc/missingDoc filtering)
+      if (Object.keys(completeness).length === 0 && allCands.length > 0) {
+        Views._loadAllCompleteness(allCands);
+      }
+    },
+
+    _clearDashboardFilter() {
+      Views._dashboardSelectedCards.clear();
+      document.querySelectorAll('.kpi-card--selected').forEach(el => el.classList.remove('kpi-card--selected'));
+      document.getElementById('dashboard-filter-hint').style.display = 'none';
+      App.setState({ filteredCandidates: App.state.candidates });
+      Views._renderDashboardTable(App.state.candidates);
+    },
+
+    _renderDashboardTable(candidates) {
+      const el = document.getElementById('dashboard-table');
+      const countEl = document.getElementById('dashboard-cands-count');
+      if (countEl) countEl.textContent = `${candidates.length} Candidate${candidates.length !== 1 ? 's' : ''}`;
+
+      if (!candidates.length) {
+        el.innerHTML = '<div class="table-empty"><div class="table-empty__icon">👥</div>No candidates match the selected filter.</div>';
+        return;
+      }
+
+      // Animate out → update → animate in
+      el.style.transition = 'opacity .18s ease, transform .18s ease';
+      el.style.opacity    = '0';
+      el.style.transform  = 'translateY(6px)';
+
+      setTimeout(() => {
+        el.innerHTML = Views._candidateTableHtml(candidates);
+        requestAnimationFrame(() => {
+          el.style.opacity   = '1';
+          el.style.transform = 'translateY(0)';
+        });
+      }, 180);
+    },
+
+    // ── DASHBOARD EXPORT ───────────────────────
+
+    _injectExportButton() {
+      // Guard: only inject once per page render
+      if (document.getElementById('dash-export-wrap')) return;
+      const actions = document.querySelector('#app-view .page-header__actions');
+      if (!actions) return;
+
+      // Build the dropdown via DOM (safe — no template literal editing)
+      const wrap = document.createElement('div');
+      wrap.id = 'dash-export-wrap';
+      wrap.style.cssText = 'position:relative;display:inline-block;vertical-align:middle';
+      wrap.innerHTML =
+        '<button class="btn btn--outline btn--sm" id="dash-export-btn"' +
+        ' onclick="Views._toggleExportMenu()" aria-haspopup="true" aria-expanded="false">' +
+        '📥 Export ▾</button>' +
+        '<div id="dash-export-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;' +
+        'background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius);' +
+        'box-shadow:var(--shadow-card);min-width:210px;z-index:300">' +
+        '<button class="dash-export-item" onclick="Views._exportDashboardCandidates()">👥 All Candidates (CSV)</button>' +
+        '<button class="dash-export-item" onclick="Views._exportDashboardKPI()">📊 KPI Summary (CSV)</button>' +
+        '</div>';
+
+      // Insert before the last button (＋ New Candidate) so it stays on the left of it
+      const lastBtn = actions.lastElementChild;
+      actions.insertBefore(wrap, lastBtn);
+    },
+
+    _toggleExportMenu() {
+      const menu = document.getElementById('dash-export-menu');
+      const btn  = document.getElementById('dash-export-btn');
+      if (!menu || !btn) return;
+      const nowOpen = menu.style.display === 'none';
+      menu.style.display = nowOpen ? 'block' : 'none';
+      btn.setAttribute('aria-expanded', String(nowOpen));
+      if (nowOpen) {
+        const closeMenu = (e) => {
+          const wrap = document.getElementById('dash-export-wrap');
+          if (wrap && !wrap.contains(e.target)) {
+            menu.style.display = 'none';
+            btn.setAttribute('aria-expanded', 'false');
+            document.removeEventListener('click', closeMenu);
+          }
+        };
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
+      }
+    },
+
+    _exportDashboardCandidates() {
+      const menu = document.getElementById('dash-export-menu');
+      if (menu) menu.style.display = 'none';
+
+      const _all      = App.state.candidates        || [];
+      const _filtered = App.state.filteredCandidates || [];
+      const data      = (_filtered.length > 0 && _filtered.length < _all.length)
+                        ? _filtered
+                        : _all;
+      if (!data || !data.length) { Toast.warning('No candidates loaded yet.'); return; }
+      const isFiltered = data.length < _all.length;
+
+      const { docCompleteness } = App.state;
+      const headers = [
+        'CandidateID','FullName','Position','Department',
+        'Email','Phone','Nationality','OfferSalary',
+        'CurrentStatus','CreatedAt','UpdatedAt',
+        'DocCompleteness%','PresentDocs','MissingDocs'
+      ];
+      const esc = v => '"' + (v || '').toString().replace(/"/g, '""') + '"';
+      const rows = data.map(c => {
+        const comp    = docCompleteness[c.CandidateID];
+        const pct     = comp ? comp.pct     : '';
+        const present = comp ? comp.presentDocs.join('; ') : '';
+        const missing = comp ? comp.missingDocs.join('; ')  : '';
+        return [
+          esc(c.CandidateID), esc(c.FullName),    esc(c.Position),    esc(c.Department),
+          esc(c.Email),        esc(c.Phone),        esc(c.Nationality), esc(c.OfferSalary),
+          esc(c.CurrentStatus),esc(c.CreatedAt),   esc(c.UpdatedAt),
+          esc(pct),            esc(present),        esc(missing)
+        ].join(',');
+      });
+      const csv  = '\uFEFF' + [headers.join(',')].concat(rows).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url;
+      a.download = 'HR_Candidates_' + new Date().toISOString().slice(0, 10) + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      Toast.success(
+        isFiltered
+          ? 'Exported ' + data.length + ' filtered candidates (out of ' + _all.length + ' total).'
+          : 'Exported all ' + data.length + ' candidates to CSV!'
+      );
+    },
+
+    _exportDashboardKPI() {
+      const menu = document.getElementById('dash-export-menu');
+      if (menu) menu.style.display = 'none';
+
+      const k = Views._kpiData;
+      if (!k) { Toast.warning('Dashboard not loaded yet. Please wait and try again.'); return; }
+
+      const today = new Date().toLocaleDateString('en-GB');
+      const rows = [
+        'Category,Metric,Count',
+        'Pipeline,Active Cases,'           + (k.activeCount        || 0),
+        'Pipeline,Missing Documents,'      + (k.missingDocs        || 0),
+        'Pipeline,Pending Medical,'        + (k.pendingMedical     || 0),
+        'Pipeline,Booked Medical Exam,'    + (k.bookedMedical      || 0),
+        'Pipeline,Docs Under Preparing,'   + (k.docsUnderPreparing || 0),
+        'Pipeline,Visa Pending,'           + (k.visaPending        || 0),
+        'Pipeline,Visa Completed,'         + (k.visaCompleted      || 0),
+        'Pipeline,Mobilized,'              + (k.mobilized          || 0),
+        'Has Document,Has Passport,'       + (k.hasPassport        || 0),
+        'Has Document,Has Photo,'          + (k.hasPhoto           || 0),
+        'Has Document,Has Academic Cert.,' + (k.hasAcademicCert    || 0),
+        'Has Document,Has Medical Exam,'   + (k.hasMedicalExam     || 0),
+        'Has Document,Has Med. Analysis,'  + (k.hasMedicalAnalysis || 0),
+        'Has Document,Has Visa,'           + (k.hasVisa            || 0),
+        'Has Document,Has CV,'             + (k.hasCV              || 0),
+        'Missing Document,Missing Passport,'      + (k.missingPassport        || 0),
+        'Missing Document,Missing Photo,'         + (k.missingPhoto           || 0),
+        'Missing Document,Missing Academic Cert.,'+ (k.missingAcademicCert    || 0),
+        'Missing Document,Missing Medical Exam,'  + (k.missingMedicalExam     || 0),
+        'Missing Document,Missing Med. Analysis,' + (k.missingMedicalAnalysis || 0),
+        'Missing Document,Missing Visa,'          + (k.missingVisa            || 0),
+        'Missing Document,Missing CV,'            + (k.missingCV              || 0),
+        ',,',
+        '"Report Date","' + today + '",'
+      ];
+      const csv  = '\uFEFF' + rows.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url;
+      a.download = 'HR_KPI_Summary_' + new Date().toISOString().slice(0, 10) + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      Toast.success('KPI Summary exported to CSV!');
+    },
+
+    // ── CANDIDATES LIST ────────────────────────
+    candidates(container) {
+      // Reset per-view filter state so filters don't persist between navigations
+      App.setState({ sortCol: '', sortDir: 'asc', statusFilters: [], docFilters: [] });
+
+      container.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 class="page-header__title">Candidates</h1>
+          <p class="page-header__sub">All mobilization candidates · document completeness · missing documents</p>
+        </div>
+        <div class="page-header__actions">
+          <button class="btn btn--outline btn--sm" onclick="Views._exportCandidates()" aria-label="Export candidates list">📤 Export</button>
+          <button class="btn btn--primary" onclick="Router.navigate('new-candidate')">＋ New Candidate</button>
+        </div>
+      </div>
+
+      <div class="table-card">
+
+        <!-- ── Toolbar: count + search + filter toggles ── -->
+        <div class="table-toolbar">
+          <span class="table-toolbar__title" id="cands-count">Loading…</span>
+          <div class="table-toolbar__actions">
+            <div class="search-input">
+              <span class="search-input__icon" aria-hidden="true">🔍</span>
+              <input type="search" id="search-input" placeholder="Search name, email, position…"
+                     aria-label="Search candidates" oninput="Views._filterCandidates()" autocomplete="off">
+            </div>
+            <button class="btn btn--outline btn--sm" id="adv-filter-btn"
+                    onclick="Views._toggleAdvancedFilters()" aria-expanded="false">⚙ Filters</button>
+            <button class="btn btn--ghost btn--sm" id="clear-filters-btn" style="display:none"
+                    onclick="Views._clearAllFilters()" aria-label="Clear all filters">✕ Clear</button>
+          </div>
+        </div>
+
+        <!-- ── Quick Filter Pills ── -->
+        <div class="quick-filters" role="group" aria-label="Quick filters">
+          <span class="quick-filters__label">Quick:</span>
+          <button class="quick-filter-btn" id="qf-doc-Passport"
+                  onclick="Views._toggleDocFilter('Passport')" aria-pressed="false">⚠ Missing Passport</button>
+          <button class="quick-filter-btn" id="qf-doc-Photo"
+                  onclick="Views._toggleDocFilter('Photo')" aria-pressed="false">⚠ Missing Photo</button>
+          <button class="quick-filter-btn" id="qf-doc-Academic_Certificate"
+                  onclick="Views._toggleDocFilter('Academic Certificate')" aria-pressed="false">⚠ Missing Acad. Cert.</button>
+          <button class="quick-filter-btn" id="qf-doc-Medical_Examination"
+                  onclick="Views._toggleDocFilter('Medical Examination')" aria-pressed="false">⚠ Missing Med. Exam</button>
+          <button class="quick-filter-btn" id="qf-doc-Medical_Analysis"
+                  onclick="Views._toggleDocFilter('Medical Analysis')" aria-pressed="false">⚠ Missing Med. Analysis</button>
+          <button class="quick-filter-btn" id="qf-doc-Visa"
+                  onclick="Views._toggleDocFilter('Visa')" aria-pressed="false">⚠ Missing Visa</button>
+          <button class="quick-filter-btn" id="qf-doc-CV"
+                  onclick="Views._toggleDocFilter('CV')" aria-pressed="false">⚠ Missing CV</button>
+          <span class="quick-filters__sep" aria-hidden="true">|</span>
+          <button class="quick-filter-btn" id="qf-status-Visa_Pending"
+                  onclick="Views._toggleStatusFilter('Visa Pending')" aria-pressed="false">🕐 Visa Pending</button>
+          <button class="quick-filter-btn" id="qf-status-Visa_Completed"
+                  onclick="Views._toggleStatusFilter('Visa Completed')" aria-pressed="false">🛂 Visa Completed</button>
+          <button class="quick-filter-btn" id="qf-status-Mobilized"
+                  onclick="Views._toggleStatusFilter('Mobilized')" aria-pressed="false">✈ Mobilized</button>
+          <button class="quick-filter-btn" id="qf-status-Documents_Complete"
+                  onclick="Views._toggleStatusFilter('Documents Complete')" aria-pressed="false">✅ Docs Complete</button>
+        </div>
+
+        <!-- ── Advanced Filter Panel (collapsible) ── -->
+        <div class="filter-panel" id="advanced-filter-panel" hidden>
+          <div class="filter-panel__inner">
+
+            <div class="filter-section">
+              <div class="filter-section__label">📋 Status</div>
+              <div class="filter-check-group">
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="New Candidate"                id="sc-New_Candidate"                onchange="Views._onStatusCheckChange()"><span>New Candidate</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="Pending Passport"             id="sc-Pending_Passport"             onchange="Views._onStatusCheckChange()"><span>Pending Passport</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="Pending Photo"                id="sc-Pending_Photo"                onchange="Views._onStatusCheckChange()"><span>Pending Photo</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="Pending Academic Certificate" id="sc-Pending_Academic_Certificate"  onchange="Views._onStatusCheckChange()"><span>Pending Academic Certificate</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="Pending Medical"              id="sc-Pending_Medical"              onchange="Views._onStatusCheckChange()"><span>Pending Medical</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="Booked a medical examination" id="sc-Booked_medical"                onchange="Views._onStatusCheckChange()"><span>Booked a medical examination</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="Documents Under Preparing"    id="sc-Docs_Under_Preparing"          onchange="Views._onStatusCheckChange()"><span>Documents Under Preparing</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="Documents Complete"          id="sc-Documents_Complete"           onchange="Views._onStatusCheckChange()"><span>Documents Complete</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="Visa Pending"                id="sc-Visa_Pending"                 onchange="Views._onStatusCheckChange()"><span>Visa Pending</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="Visa Completed"              id="sc-Visa_Completed"               onchange="Views._onStatusCheckChange()"><span>Visa Completed</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="Mobilized"                   id="sc-Mobilized"                    onchange="Views._onStatusCheckChange()"><span>Mobilized</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="status-check" value="Closed"                      id="sc-Closed"                       onchange="Views._onStatusCheckChange()"><span>Closed</span></label>
+              </div>
+            </div>
+
+            <div class="filter-section">
+              <div class="filter-section__label">🚫 Exclude Status</div>
+              <div class="filter-check-group">
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="New Candidate"                id="ex-New_Candidate"                onchange="Views._onExcludeStatusCheckChange()"><span>New Candidate</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="Pending Passport"             id="ex-Pending_Passport"             onchange="Views._onExcludeStatusCheckChange()"><span>Pending Passport</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="Pending Photo"                id="ex-Pending_Photo"                onchange="Views._onExcludeStatusCheckChange()"><span>Pending Photo</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="Pending Academic Certificate" id="ex-Pending_Academic_Certificate"  onchange="Views._onExcludeStatusCheckChange()"><span>Pending Academic Certificate</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="Pending Medical"              id="ex-Pending_Medical"              onchange="Views._onExcludeStatusCheckChange()"><span>Pending Medical</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="Booked a medical examination" id="ex-Booked_medical"                onchange="Views._onExcludeStatusCheckChange()"><span>Booked a medical examination</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="Documents Under Preparing"    id="ex-Docs_Under_Preparing"          onchange="Views._onExcludeStatusCheckChange()"><span>Documents Under Preparing</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="Documents Complete"          id="ex-Documents_Complete"           onchange="Views._onExcludeStatusCheckChange()"><span>Documents Complete</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="Visa Pending"                id="ex-Visa_Pending"                 onchange="Views._onExcludeStatusCheckChange()"><span>Visa Pending</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="Visa Completed"              id="ex-Visa_Completed"               onchange="Views._onExcludeStatusCheckChange()"><span>Visa Completed</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="Mobilized"                   id="ex-Mobilized"                    onchange="Views._onExcludeStatusCheckChange()"><span>Mobilized</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="excl-status-check" value="Closed"                      id="ex-Closed"                       onchange="Views._onExcludeStatusCheckChange()"><span>Closed</span></label>
+              </div>
+            </div>
+
+            <div class="filter-section">
+              <div class="filter-section__label">📎 Missing Documents</div>
+              <div class="filter-check-group">
+                <label class="filter-check-item"><input type="checkbox" class="doc-check" value="Passport"             id="dc-Passport"             onchange="Views._onDocCheckChange()"><span>Missing Passport</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="doc-check" value="Photo"                id="dc-Photo"                onchange="Views._onDocCheckChange()"><span>Missing Photo</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="doc-check" value="Academic Certificate" id="dc-Academic_Certificate" onchange="Views._onDocCheckChange()"><span>Missing Academic Certificate</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="doc-check" value="Medical Examination" id="dc-Medical_Examination" onchange="Views._onDocCheckChange()"><span>Missing Medical Examination</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="doc-check" value="Medical Analysis"    id="dc-Medical_Analysis"    onchange="Views._onDocCheckChange()"><span>Missing Medical Analysis</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="doc-check" value="Visa"                 id="dc-Visa"                 onchange="Views._onDocCheckChange()"><span>Missing Visa</span></label>
+                <label class="filter-check-item"><input type="checkbox" class="doc-check" value="CV"                   id="dc-CV"                   onchange="Views._onDocCheckChange()"><span>Missing CV</span></label>
+              </div>
+            </div>
+
+            <div class="filter-section">
+              <div class="filter-section__label">🏢 Department</div>
+              <select id="dept-filter" class="form-select" style="max-width:190px" onchange="Views._saveFilterState();Views._filterCandidates()">
+                <option value="">All Departments</option>
+                <option>Projects</option><option>Maintenance</option><option>Finance</option>
+                <option>HR</option><option>Operations</option><option>IT</option><option>Safety</option>
+              </select>
+            </div>
+
+            <div class="filter-section">
+              <div class="filter-section__label">📊 Min. Completion %</div>
+              <div style="display:flex;align-items:center;gap:var(--sp-2)">
+                <input type="range" id="completion-min" min="0" max="100" step="17" value="0"
+                       style="width:130px;accent-color:var(--primary)" oninput="Views._onCompletionRange(this.value)">
+                <span id="completion-min-val" style="font-weight:700;color:var(--primary);min-width:36px">0%</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── Table ── -->
+        <div id="candidates-table">
+          <div class="loading-overlay"><div class="spinner spinner--dark"></div>Loading candidates…</div>
+        </div>
+        <div class="table-footer" id="table-footer"></div>
+      </div>`;
+
+      Views._loadCandidates();
+    },
+
+    // ── Load candidates then kick off batch completeness fetch ──
+    async _loadCandidates() {
+      try {
+        const res = await GAS.call('api_getAllCandidates');
+        if (!res.success) throw new Error(res.error);
+        App.setState({ candidates: res.data, filteredCandidates: res.data });
+
+        // Fetch upcoming events in the background to populate priority dots
+        GAS.call('api_getAllUpcomingEvents').then(evRes => {
+          if (evRes.success) {
+            Views._candidateEventDots = Views._buildEventDotsMap(evRes.data);
+            Views._renderCandidatesTable(App.state.filteredCandidates);
+          }
+        }).catch(() => {});
+
+        // Render immediately (completeness cells will show "Loading…" state)
+        Views._renderCandidatesTable(res.data);
+        // Fire off batch completeness fetch in background
+        Views._loadAllCompleteness(res.data);
+      } catch (err) {
+        document.getElementById('candidates-table').innerHTML =
+          `<div class="table-empty"><div class="table-empty__icon">⚠️</div>Failed to load: ${escHtml(err.message)}</div>`;
+        Toast.error('Failed to load candidates.');
+      }
+    },
+
+    // ── Batch-fetch document completeness for every candidate ──
+    // Reuses api_getDocumentsByCandidate + computeCompleteness — no duplication.
+    async _loadAllCompleteness(candidates) {
+      try {
+        const results = await Promise.allSettled(
+          candidates.map(c => GAS.call('api_getDocumentsByCandidate', c.CandidateID))
+        );
+        const completeness = {};
+        results.forEach((result, i) => {
+          const cand = candidates[i];
+          completeness[cand.CandidateID] = (result.status === 'fulfilled' && result.value?.success)
+            ? computeCompleteness(result.value.data)
+            : { pct: 0, missingDocs: [...REQUIRED_DOCS], presentDocs: [] };
+        });
+        App.setState({ docCompleteness: completeness });
+        // Re-render table now that completeness data is available — restore saved filters first
+        Views._restoreFilterState();
+      } catch (err) {
+        console.error('Completeness batch load error:', err);
+      }
+    },
+
+    // ── Combined filter + sort ──
+    _filterCandidates() {
+      const query         = (document.getElementById('search-input')?.value || '').toLowerCase();
+      const deptFilter    = document.getElementById('dept-filter')?.value || '';
+      const completionMin = parseInt(document.getElementById('completion-min')?.value || '0', 10);
+      const { statusFilters, docFilters, docCompleteness, sortCol, sortDir } = App.state;
+
+      let data = App.state.candidates.filter(c => {
+        // Text search
+        const matchQ = !query ||
+          c.FullName?.toLowerCase().includes(query) ||
+          c.Email?.toLowerCase().includes(query) ||
+          c.Position?.toLowerCase().includes(query);
+        // Multi-select status INCLUDE (empty array = all)
+        const matchS = statusFilters.length === 0 || statusFilters.includes(c.CurrentStatus);
+        // Multi-select status EXCLUDE (empty array = hide nothing)
+        const { excludeStatusFilters } = App.state;
+        const matchExcl = excludeStatusFilters.length === 0 || !excludeStatusFilters.includes(c.CurrentStatus);
+        // Department
+        const matchD = !deptFilter || c.Department === deptFilter;
+        // Missing doc filter — candidate must be missing ANY of the selected doc types
+        const comp = docCompleteness[c.CandidateID];
+        const matchDoc = docFilters.length === 0 ||
+          (comp && docFilters.some(doc => comp.missingDocs.includes(doc)));
+        // Minimum completion %
+        const matchCompletion = !comp || comp.pct >= completionMin;
+        return matchQ && matchS && matchExcl && matchD && matchDoc && matchCompletion;
+      });
+
+      // Sorting
+      if (sortCol) {
+        data = [...data].sort((a, b) => {
+          let valA, valB;
+          if (sortCol === 'pct') {
+            valA = docCompleteness[a.CandidateID]?.pct ?? -1;
+            valB = docCompleteness[b.CandidateID]?.pct ?? -1;
+          } else if (sortCol === 'missingCount') {
+            valA = docCompleteness[a.CandidateID]?.missingDocs.length ?? REQUIRED_DOCS.length;
+            valB = docCompleteness[b.CandidateID]?.missingDocs.length ?? REQUIRED_DOCS.length;
+          } else {
+            valA = (a[sortCol] || '').toString().toLowerCase();
+            valB = (b[sortCol] || '').toString().toLowerCase();
+          }
+          if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+          if (valA > valB) return sortDir === 'asc' ?  1 : -1;
+          return 0;
+        });
+      }
+
+      App.setState({ filteredCandidates: data });
+      Views._renderCandidatesTable(data);
+    },
+
+    // ── Column sort toggle ──
+    _sortBy(col) {
+      const { sortCol, sortDir } = App.state;
+      App.setState({
+        sortCol: col,
+        sortDir: sortCol === col && sortDir === 'asc' ? 'desc' : 'asc'
+      });
+      Views._filterCandidates();
+    },
+
+    // ── Quick-filter: toggle a doc type as "missing" ──
+    _toggleDocFilter(docType) {
+      const key     = docType.replace(/\s/g, '_');
+      const filters = [...App.state.docFilters];
+      const idx     = filters.indexOf(docType);
+      if (idx >= 0) filters.splice(idx, 1); else filters.push(docType);
+      App.setState({ docFilters: filters });
+      // Sync advanced-panel checkbox
+      const cb = document.getElementById(`dc-${key}`);
+      if (cb) cb.checked = filters.includes(docType);
+      // Sync quick-filter button appearance
+      const btn = document.getElementById(`qf-doc-${key}`);
+      if (btn) {
+        btn.classList.toggle('quick-filter-btn--active', filters.includes(docType));
+        btn.setAttribute('aria-pressed', String(filters.includes(docType)));
+      }
+      Views._saveFilterState();
+      Views._updateClearButton();
+      Views._filterCandidates();
+    },
+
+    // ── Quick-filter: toggle a status ──
+    _toggleStatusFilter(status) {
+      const key     = status.replace(/\s/g, '_');
+      const filters = [...App.state.statusFilters];
+      const idx     = filters.indexOf(status);
+      if (idx >= 0) filters.splice(idx, 1); else filters.push(status);
+      App.setState({ statusFilters: filters });
+      const cb = document.getElementById(`sc-${key}`);
+      if (cb) cb.checked = filters.includes(status);
+      const btn = document.getElementById(`qf-status-${key}`);
+      if (btn) {
+        btn.classList.toggle('quick-filter-btn--active', filters.includes(status));
+        btn.setAttribute('aria-pressed', String(filters.includes(status)));
+      }
+      Views._saveFilterState();
+      Views._updateClearButton();
+      Views._filterCandidates();
+    },
+
+    // ── Advanced panel: status checkboxes changed ──
+    _onStatusCheckChange() {
+      const checked = [...document.querySelectorAll('.status-check:checked')].map(el => el.value);
+      App.setState({ statusFilters: checked });
+      ['Visa Pending','Visa Completed','Mobilized','Documents Complete'].forEach(st => {
+        const btn = document.getElementById(`qf-status-${st.replace(/\s/g,'_')}`);
+        if (btn) {
+          btn.classList.toggle('quick-filter-btn--active', checked.includes(st));
+          btn.setAttribute('aria-pressed', String(checked.includes(st)));
+        }
+      });
+      Views._saveFilterState();
+      Views._updateClearButton();
+      Views._filterCandidates();
+    },
+
+    // ── Advanced panel: exclude-status checkboxes changed ──
+    _onExcludeStatusCheckChange() {
+      const checked = [...document.querySelectorAll('.excl-status-check:checked')].map(el => el.value);
+      App.setState({ excludeStatusFilters: checked });
+      Views._saveFilterState();
+      Views._updateClearButton();
+      Views._filterCandidates();
+    },
+
+    // ── Advanced panel: document checkboxes changed ──
+    _onDocCheckChange() {
+      const checked = [...document.querySelectorAll('.doc-check:checked')].map(el => el.value);
+      App.setState({ docFilters: checked });
+      ['Passport','Photo','Academic Certificate','Medical','Visa','CV'].forEach(doc => {
+        const btn = document.getElementById(`qf-doc-${doc.replace(/\s/g,'_')}`);
+        if (btn) {
+          btn.classList.toggle('quick-filter-btn--active', checked.includes(doc));
+          btn.setAttribute('aria-pressed', String(checked.includes(doc)));
+        }
+      });
+      Views._saveFilterState();
+      Views._updateClearButton();
+      Views._filterCandidates();
+    },
+
+    _onCompletionRange(value) {
+      const el = document.getElementById('completion-min-val');
+      if (el) el.textContent = value + '%';
+      Views._saveFilterState();
+      Views._filterCandidates();
+    },
+
+    // ── Persist all filter state to localStorage ──
+    _saveFilterState() {
+      const deptEl  = document.getElementById('dept-filter');
+      const rangeEl = document.getElementById('completion-min');
+      const payload = {
+        statusFilters:        App.state.statusFilters,
+        excludeStatusFilters: App.state.excludeStatusFilters,
+        docFilters:           App.state.docFilters,
+        deptFilter:           deptEl  ? deptEl.value  : '',
+        completionMin:        rangeEl ? parseInt(rangeEl.value, 10) : 0,
+      };
+      try { localStorage.setItem('hr_candidate_filters', JSON.stringify(payload)); } catch (_) {}
+    },
+
+    // ── Restore filter state from localStorage and re-apply ──
+    _restoreFilterState() {
+      let saved;
+      try { saved = JSON.parse(localStorage.getItem('hr_candidate_filters') || 'null'); } catch (_) {}
+      if (!saved) return;
+
+      // Restore state object
+      App.setState({
+        statusFilters:        Array.isArray(saved.statusFilters)        ? saved.statusFilters        : [],
+        excludeStatusFilters: Array.isArray(saved.excludeStatusFilters) ? saved.excludeStatusFilters : [],
+        docFilters:           Array.isArray(saved.docFilters)           ? saved.docFilters           : [],
+      });
+
+      // Restore Status checkboxes + quick-filter buttons
+      document.querySelectorAll('.status-check').forEach(cb => {
+        cb.checked = App.state.statusFilters.includes(cb.value);
+      });
+      ['Visa Pending','Visa Completed','Mobilized','Documents Complete'].forEach(st => {
+        const btn = document.getElementById(`qf-status-${st.replace(/\s/g,'_')}`);
+        if (btn) {
+          const on = App.state.statusFilters.includes(st);
+          btn.classList.toggle('quick-filter-btn--active', on);
+          btn.setAttribute('aria-pressed', String(on));
+        }
+      });
+
+      // Restore Exclude Status checkboxes
+      document.querySelectorAll('.excl-status-check').forEach(cb => {
+        cb.checked = App.state.excludeStatusFilters.includes(cb.value);
+      });
+
+      // Restore Doc checkboxes + quick-filter buttons
+      document.querySelectorAll('.doc-check').forEach(cb => {
+        cb.checked = App.state.docFilters.includes(cb.value);
+      });
+      ['Passport','Photo','Academic Certificate','Medical Examination','Medical Analysis','Visa','CV'].forEach(doc => {
+        const btn = document.getElementById(`qf-doc-${doc.replace(/\s/g,'_')}`);
+        if (btn) {
+          const on = App.state.docFilters.includes(doc);
+          btn.classList.toggle('quick-filter-btn--active', on);
+          btn.setAttribute('aria-pressed', String(on));
+        }
+      });
+
+      // Restore Department dropdown
+      const deptEl = document.getElementById('dept-filter');
+      if (deptEl && saved.deptFilter) deptEl.value = saved.deptFilter;
+
+      // Restore Completion % range
+      const rangeEl  = document.getElementById('completion-min');
+      const rangeVal = document.getElementById('completion-min-val');
+      if (rangeEl && saved.completionMin != null) {
+        rangeEl.value = saved.completionMin;
+        if (rangeVal) rangeVal.textContent = saved.completionMin + '%';
+      }
+
+      Views._updateClearButton();
+      Views._filterCandidates();
+    },
+
+    _toggleAdvancedFilters() {
+      const panel = document.getElementById('advanced-filter-panel');
+      const btn   = document.getElementById('adv-filter-btn');
+      if (!panel || !btn) return;
+      const wasHidden = panel.hidden;
+      panel.hidden = !wasHidden;
+      btn.setAttribute('aria-expanded', String(wasHidden));
+      btn.classList.toggle('btn--primary', wasHidden);
+      btn.classList.toggle('btn--outline', !wasHidden);
+    },
+
+    _clearAllFilters() {
+      App.setState({ statusFilters: [], excludeStatusFilters: [], docFilters: [], sortCol: '', sortDir: 'asc' });
+      document.querySelectorAll('.status-check, .excl-status-check, .doc-check').forEach(cb => { cb.checked = false; });
+      document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+        btn.classList.remove('quick-filter-btn--active');
+        btn.setAttribute('aria-pressed', 'false');
+      });
+      const deptFilter = document.getElementById('dept-filter');
+      if (deptFilter) deptFilter.value = '';
+      const range = document.getElementById('completion-min');
+      if (range) range.value = '0';
+      const rangeVal = document.getElementById('completion-min-val');
+      if (rangeVal) rangeVal.textContent = '0%';
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) searchInput.value = '';
+      try { localStorage.removeItem('hr_candidate_filters'); } catch (_) {}
+      Views._updateClearButton();
+      Views._filterCandidates();
+    },
+
+    _updateClearButton() {
+      const hasFilters = App.state.statusFilters.length > 0
+        || App.state.excludeStatusFilters.length > 0
+        || App.state.docFilters.length > 0;
+      const btn = document.getElementById('clear-filters-btn');
+      if (btn) btn.style.display = hasFilters ? '' : 'none';
+    },
+
+    _renderCandidatesTable(data) {
+      const count = document.getElementById('cands-count');
+      if (count) count.textContent = `${data.length} Candidate${data.length !== 1 ? 's' : ''}`;
+      const footer = document.getElementById('table-footer');
+      if (footer) footer.textContent = `Showing ${data.length} of ${App.state.candidates.length} candidates`;
+      document.getElementById('candidates-table').innerHTML = data.length
+        ? Views._candidateTableHtml(data)
+        : '<div class="table-empty"><div class="table-empty__icon">🔍</div>No candidates match your filters.</div>';
+    },
+
+    // ── Sortable column header HTML helper ──
+    _thSort(label, col) {
+      const { sortCol, sortDir } = App.state;
+      const active   = sortCol === col;
+      const arrow    = active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅';
+      const ariaSort = active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+      return `<th scope="col" class="th--sortable${active ? ' th--sorted' : ''}"
+                  onclick="Views._sortBy('${col}')" aria-sort="${ariaSort}">${label}<span class="th-arrow" aria-hidden="true"> ${arrow}</span></th>`;
+    },
+
+    _buildEventDotsMap(events) {
+      const rank = { High: 3, Medium: 2, Low: 1 };
+      const map = {};
+      (events || []).forEach(e => {
+        if (e.Status !== 'Active') return;
+        const cur = map[e.CandidateID];
+        if (!cur || rank[e.Priority] > rank[cur]) {
+          map[e.CandidateID] = e.Priority;
+        }
+      });
+      return map;
+    },
+
+    _eventDotHtml(candidateId) {
+      const p = (Views._candidateEventDots || {})[candidateId];
+      if (!p) return '';
+      const color = p === 'High' ? 'var(--danger)' : p === 'Medium' ? 'var(--warning)' : 'var(--success)';
+      const label = `${p} priority upcoming event`;
+      return `<span class="cand-event-dot" style="background:${color}" title="${label}" aria-label="${label}"></span>`;
+    },
+
+    _candidateTableHtml(rows) {
+      const { docCompleteness } = App.state;
+
+      const trs = rows.map(c => {
+        const comp        = docCompleteness[c.CandidateID];
+        const pct         = comp?.pct ?? null;
+        const missingDocs = comp?.missingDocs ?? [];
+
+        const barColor = pct === null ? 'var(--text-muted)'
+                       : pct === 100  ? 'var(--success)'
+                       : pct >= 50    ? 'var(--primary)'
+                       : 'var(--warning)';
+
+        const completenessCell = pct !== null
+          ? `<div class="doc-progress-mini">
+               <div class="doc-progress-mini__bar-track"
+                    role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"
+                    aria-label="${pct}% document completeness">
+                 <div class="doc-progress-mini__bar-fill" style="width:${pct}%;background:${barColor}"></div>
+               </div>
+               <span class="doc-progress-mini__pct" style="color:${barColor}">${pct}%</span>
+             </div>`
+          : `<span class="doc-progress-mini__loading">Loading…</span>`;
+
+        const missingCell = pct === null
+          ? '<span class="doc-progress-mini__loading">…</span>'
+          : missingDocs.length > 0
+            ? `<div class="missing-chips">${missingDocs.map(d => `<span class="missing-chip">${escHtml(d)}</span>`).join('')}</div>`
+            : `<span class="doc-chip doc-chip--complete" style="font-size:.7rem;padding:2px 8px">✅ Complete</span>`;
+
+        return `
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:34px;height:34px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:grid;place-items:center;font-weight:700;font-size:.78rem;flex-shrink:0">${fmt.initials(c.FullName)}</div>
+              <div>
+                <div class="td-primary">${escHtml(c.FullName)} ${Views._eventDotHtml(c.CandidateID)}</div>
+                <div class="td-secondary">${escHtml(c.Phone || '—')}</div>
+                ${c.Notes ? `<div class="td-secondary" style="font-style:italic;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(c.Notes)}">${escHtml(c.Notes)}</div>` : ''}
+              </div>
+            </div>
+          </td>
+          <td>${escHtml(c.Position)}</td>
+          <td>${escHtml(c.Department)}</td>
+          <td>${escHtml(c.Nationality)}</td>
+          <td>${statusBadge(c.CurrentStatus)}</td>
+          <td style="min-width:130px">${completenessCell}</td>
+          <td style="min-width:160px">${missingCell}</td>
+          <td style="white-space:nowrap">${fmt.date(c.CreatedAt)}</td>
+          <td>
+            <button class="btn btn--outline btn--sm"
+                    onclick="Router.navigate('candidate-detail',{selectedCandidate:${JSON.stringify(c).replace(/"/g, '&quot;')}})"
+                    aria-label="View ${escHtml(c.FullName)} details">View</button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      return `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              ${Views._thSort('Candidate', 'FullName')}
+              <th scope="col">Position</th>
+              ${Views._thSort('Department', 'Department')}
+              <th scope="col">Nationality</th>
+              ${Views._thSort('Status', 'CurrentStatus')}
+              ${Views._thSort('Doc Completeness', 'pct')}
+              ${Views._thSort('Missing Documents', 'missingCount')}
+              ${Views._thSort('Created', 'CreatedAt')}
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>${trs}</tbody>
+        </table>
+      </div>`;
+    },
+
+    _exportCandidates() {
+      const _all      = App.state.candidates        || [];
+      const _filtered = App.state.filteredCandidates || [];
+
+      // Use filtered list only when it's a real subset (filter is active)
+      const data = (_filtered.length > 0 && _filtered.length < _all.length)
+                   ? _filtered
+                   : _all;
+
+      if (!data || !data.length) {
+        Toast.warning('No candidates to export.');
+        return;
+      }
+
+      const isFiltered  = data.length < _all.length;
+      const { docCompleteness } = App.state;
+
+      const headers = [
+        'CandidateID', 'FullName', 'Position', 'Department',
+        'Email', 'Phone', 'Nationality', 'OfferSalary',
+        'CurrentStatus', 'CreatedAt', 'UpdatedAt',
+        'DocCompleteness%', 'PresentDocs', 'MissingDocs'
+      ];
+
+      const esc = v => '"' + (v || '').toString().replace(/"/g, '""') + '"';
+
+      const rows = data.map(c => {
+        const comp    = docCompleteness[c.CandidateID];
+        const pct     = comp ? comp.pct                     : '';
+        const present = comp ? comp.presentDocs.join('; ')  : '';
+        const missing = comp ? comp.missingDocs.join('; ')  : '';
+        return [
+          esc(c.CandidateID), esc(c.FullName),     esc(c.Position),    esc(c.Department),
+          esc(c.Email),        esc(c.Phone),         esc(c.Nationality), esc(c.OfferSalary),
+          esc(c.CurrentStatus),esc(c.CreatedAt),    esc(c.UpdatedAt),
+          esc(pct),            esc(present),         esc(missing)
+        ].join(',');
+      });
+
+      const csv  = '\uFEFF' + [headers.join(',')].concat(rows).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'HR_Candidates_' + new Date().toISOString().slice(0, 10) + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      Toast.success(
+        isFiltered
+          ? '✅ Exported ' + data.length + ' filtered candidates (out of ' + _all.length + ' total).'
+          : '✅ Exported all ' + data.length + ' candidates.'
+      );
+    },
+
+    // ── CANDIDATE DETAIL ───────────────────────
+    candidateDetail(container) {
+      const c = App.state.selectedCandidate;
+      if (!c) { Router.navigate('candidates'); return; }
+
+      const statusOptions = [
+        'New Candidate',
+        'Documents Under Preparing',
+        'Pending Passport',
+        'Pending Photo',
+        'Pending Academic Certificate',
+        'Pending Medical',
+        'Booked a medical examination',
+        'Documents Complete',
+        'Visa Pending',
+        'Visa Completed',
+        'Mobilized',
+        'Closed'
+      ];
+
+      container.innerHTML = `
+      <div class="page-header">
+        <div>
+          <button class="btn btn--ghost btn--sm" onclick="Router.navigate('candidates')" style="margin-bottom:var(--sp-2);padding-left:0">
+            ← Back to Candidates
+          </button>
+          <h1 class="page-header__title">${escHtml(c.FullName)}</h1>
+          <p class="page-header__sub">${escHtml(c.Position)} · ${escHtml(c.Department)} · ${statusBadge(c.CurrentStatus)}</p>
+        </div>
+        <div class="page-header__actions">
+          <button class="btn btn--outline btn--sm" onclick="Views._openEditProfileModal('${escHtml(c.CandidateID)}')">
+            ✏️ Edit Profile
+          </button>
+          <button class="btn btn--outline btn--sm" onclick="Views._openStatusModal('${escHtml(c.CandidateID)}','${escHtml(c.FullName)}')">
+            🔄 Update Status
+          </button>
+          <button class="btn btn--outline btn--sm" onclick="Views._openEventModal('${escHtml(c.CandidateID)}')">
+            📅 Add Event
+          </button>
+          <button class="btn btn--primary" onclick="Views._openUploadModal('${escHtml(c.CandidateID)}','${escHtml(c.DriveFolderID || '')}')">
+            📤 Upload Document
+          </button>
+        </div>
+      </div>
+
+      <!-- Info Cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--sp-3);margin-bottom:var(--sp-4)">
+        ${Views._infoChip('Email', c.Email)}
+        ${Views._infoChip('Phone', c.Phone)}
+        ${Views._infoChip('Nationality', c.Nationality)}
+        ${Views._infoChip('Salary', c.OfferSalary ? c.OfferSalary + ' OMR' : '—')}
+        ${Views._infoChip('Joined', fmt.date(c.CreatedAt))}
+        ${Views._infoChip('Notes', c.Notes)}
+        ${Views._infoChip('Drive Folder', c.DriveFolderID
+        ? `<a href="https://drive.google.com/drive/folders/${escHtml(c.DriveFolderID)}" target="_blank" rel="noopener">Open Folder ↗</a>`
+        : '<em style="color:var(--text-muted)">No folder yet</em>')}
+      </div>
+
+      <!-- Document Completeness Panel -->
+      <div class="doc-completeness" id="doc-completeness" style="margin-bottom:var(--sp-3)">
+        <div class="loading-overlay"><div class="spinner spinner--dark"></div>Calculating completeness…</div>
+      </div>
+
+      <!-- Documents Section -->
+      <div class="table-card" style="margin-bottom:var(--sp-4)">
+        <div class="table-toolbar">
+          <span class="table-toolbar__title">📎 Documents</span>
+        </div>
+        <div id="docs-section" style="padding:var(--sp-3)">
+          <div class="loading-overlay"><div class="spinner spinner--dark"></div>Loading documents…</div>
+        </div>
+      </div>
+
+      <!-- Events Section -->
+      <div class="table-card" style="margin-bottom:var(--sp-4)">
+        <div class="table-toolbar">
+          <span class="table-toolbar__title">📅 Follow-up Events</span>
+        </div>
+        <div id="events-section" style="padding:var(--sp-3)">
+          <div class="loading-overlay"><div class="spinner spinner--dark"></div>Loading events…</div>
+        </div>
+      </div>
+
+      <!-- Audit Log Section -->
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="table-toolbar__title">📋 Audit Log</span>
+        </div>
+        <div id="audit-section" style="padding:var(--sp-3)">
+          <div class="loading-overlay"><div class="spinner spinner--dark"></div>Loading log…</div>
+        </div>
+      </div>`;
+
+      Views._loadCandidateDocuments(c.CandidateID);
+      Views._loadCandidateEvents(c.CandidateID);
+      Views._loadCandidateAudit(c.CandidateID);
+    },
+
+    _infoChip(label, value) {
+      return `
+      <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-3)">
+        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px">${label}</div>
+        <div style="font-size:.9rem;font-weight:600">${value || '—'}</div>
+      </div>`;
+    },
+
+    async _loadCandidateDocuments(candidateId) {
+      // Required documents for completeness calculation — must stay in sync with global REQUIRED_DOCS
+      const REQUIRED_DOCS = ['Passport', 'Photo', 'Academic Certificate', 'Medical Examination', 'Medical Analysis', 'Visa', 'CV'];
+
+      try {
+        const res = await GAS.call('api_getDocumentsByCandidate', candidateId);
+        if (!res.success) throw new Error(res.error);
+        const docs = res.data;
+        const el = document.getElementById('docs-section');
+
+        // ── Document Completeness Panel ──────────────────────────────────
+        const completenessEl = document.getElementById('doc-completeness');
+        if (completenessEl) {
+          // Map uploaded doc types (normalise for comparison)
+          const uploadedTypes = new Set(
+            docs
+              .filter(d => d.ApprovalStatus !== 'Rejected')
+              .map(d => (d.DocType || '').trim())
+          );
+
+          // Determine which required docs are present
+          const presentDocs  = REQUIRED_DOCS.filter(req => uploadedTypes.has(req));
+          const missingDocs  = REQUIRED_DOCS.filter(req => !uploadedTypes.has(req));
+          const completedCount = presentDocs.length;
+          const totalCount     = REQUIRED_DOCS.length;
+          const pct            = Math.round((completedCount / totalCount) * 100);
+
+          // Derive suggested auto-status
+          let suggestedStatus = '';
+          if (!uploadedTypes.has('Passport'))                  suggestedStatus = 'Pending Passport';
+          else if (!uploadedTypes.has('Photo'))                suggestedStatus = 'Pending Photo';
+          else if (!uploadedTypes.has('Academic Certificate')) suggestedStatus = 'Pending Academic Certificate';
+          else if (!uploadedTypes.has('Medical Examination'))  suggestedStatus = 'Booked a medical examination';
+          else if (!uploadedTypes.has('Medical Analysis'))     suggestedStatus = 'Booked a medical examination';
+          else                                                 suggestedStatus = 'Documents Complete';
+
+          // Determine bar colour
+          const barColor = pct === 100 ? 'var(--success)'
+                         : pct >= 50   ? 'var(--primary)'
+                         : 'var(--warning)';
+
+          completenessEl.innerHTML = `
+          <div class="doc-completeness__inner">
+            <div class="doc-completeness__header">
+              <span class="doc-completeness__title">📋 Document Completeness</span>
+              <span class="doc-completeness__pct" style="color:${barColor}">${pct}%</span>
+            </div>
+            <div class="doc-completeness__bar-track" role="progressbar"
+                 aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"
+                 aria-label="Document completeness ${pct}%">
+              <div class="doc-completeness__bar-fill" style="width:${pct}%;background:${barColor}"></div>
+            </div>
+            <div class="doc-completeness__meta">
+              <span>${completedCount} of ${totalCount} documents uploaded</span>
+              ${suggestedStatus ? `<span>Suggested status: ${statusBadge(suggestedStatus)}</span>` : ''}
+            </div>
+            ${missingDocs.length ? `
+            <div class="doc-completeness__missing">
+              <span class="doc-completeness__missing-label">Missing:</span>
+              ${missingDocs.map(d => `<span class="doc-chip doc-chip--missing">⚠ ${escHtml(d)}</span>`).join('')}
+            </div>` : `
+            <div class="doc-completeness__missing">
+              <span class="doc-chip doc-chip--complete">✅ All required documents uploaded</span>
+            </div>`}
+          </div>`;
+        }
+
+        // ── Documents List ───────────────────────────────────────────────
+        if (!el) return;
+
+        if (!docs.length) {
+          el.innerHTML = '<div class="table-empty"><div class="table-empty__icon">📭</div>No documents uploaded yet.</div>';
+          return;
+        }
+
+        el.innerHTML = docs.map(d => `
+        <div class="doc-row">
+          <div class="doc-row__icon" aria-hidden="true">${d.FileName?.endsWith('.pdf') ? '📄' : '🖼️'}</div>
+          <div class="doc-row__info">
+            <div class="doc-row__name">${escHtml(d.DocType)} — v${d.VersionNumber || 1}</div>
+            <div class="doc-row__meta">${escHtml(d.FileName)} · Uploaded ${fmt.date(d.UploadDate)}</div>
+          </div>
+          <div style="margin:0 var(--sp-2)">${statusBadge(d.ApprovalStatus)}</div>
+          <div class="doc-row__actions">
+            ${d.FileURL && d.FileURL !== '#' ? `<a href="${escHtml(d.FileURL)}" target="_blank" rel="noopener" class="btn btn--outline btn--sm" aria-label="View ${escHtml(d.DocType)}">View ↗</a>` : ''}
+          </div>
+        </div>`).join('');
+      } catch (err) {
+        const el = document.getElementById('docs-section');
+        if (el) el.innerHTML = `<div class="table-empty">⚠️ ${escHtml(err.message)}</div>`;
+        const completenessEl = document.getElementById('doc-completeness');
+        if (completenessEl) completenessEl.innerHTML = '';
+      }
+    },
+
+    async _loadCandidateAudit(candidateId) {
+      try {
+        const res = await GAS.call('api_getAuditLog', candidateId);
+        if (!res.success) throw new Error(res.error);
+        const el = document.getElementById('audit-section');
+        if (!el) return;
+
+        if (!res.data.length) {
+          el.innerHTML = '<div class="table-empty"><div class="table-empty__icon">📋</div>No audit entries.</div>';
+          return;
+        }
+
+        el.innerHTML = `<div class="timeline">
+        ${res.data.slice().reverse().map(log => `
+          <div class="timeline__item">
+            <div class="timeline__time">${fmt.dateTime(log.Timestamp)}</div>
+            <div class="timeline__event">${escHtml(log.Event)}</div>
+            <div class="timeline__actor">by ${escHtml(log.Actor)}</div>
+          </div>`).join('')}
+      </div>`;
+      } catch (err) {
+        const el = document.getElementById('audit-section');
+        if (el) el.innerHTML = `<div class="table-empty">⚠️ ${escHtml(err.message)}</div>`;
+      }
+    },
+
+
+    _openStatusModal(candidateId, candidateName) {
+      const options = [
+        'New Candidate',
+        'Documents Under Preparing',
+        'Pending Passport',
+        'Pending Photo',
+        'Pending Academic Certificate',
+        'Pending Medical',
+        'Booked a medical examination',
+        'Documents Complete',
+        'Visa Pending',
+        'Visa Completed',
+        'Mobilized',
+        'Closed'
+      ];
+      Modal.open(`
+      <div class="modal__header">
+        <h2 class="modal__title">🔄 Update Status</h2>
+        <button class="modal__close" onclick="Modal.close()" aria-label="Close">✕</button>
+      </div>
+      <div class="modal__body">
+        <p style="margin-bottom:var(--sp-3);color:var(--text-secondary)">Update mobilization status for <strong>${escHtml(candidateName)}</strong></p>
+        <div class="form-group">
+          <label class="form-label" for="new-status">New Status <span class="required">*</span></label>
+          <select class="form-select" id="new-status">
+            ${options.map(o => `<option value="${o}">${o}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--outline" onclick="Modal.close()">Cancel</button>
+        <button class="btn btn--primary" onclick="Views._submitStatus('${candidateId}')">Save Status</button>
+      </div>`);
+    },
+
+    async _submitStatus(candidateId) {
+      const newStatus = document.getElementById('new-status')?.value;
+      if (!newStatus) return;
+      Modal.close();
+      try {
+        const res = await GAS.call('api_updateCandidateStatus', candidateId, newStatus);
+        if (!res.success) throw new Error(res.error);
+        // Update local state
+        const cand = App.state.candidates.find(c => c.CandidateID === candidateId);
+        if (cand) cand.CurrentStatus = newStatus;
+        if (App.state.selectedCandidate?.CandidateID === candidateId)
+          App.state.selectedCandidate.CurrentStatus = newStatus;
+        Toast.success('Status updated to: ' + newStatus);
+        Router.navigate('candidate-detail');
+      } catch (err) {
+        Toast.error('Update failed: ' + err.message);
+      }
+    },
+
+    _openEditProfileModal(candidateId) {
+      const c = App.state.candidates.find(cand => cand.CandidateID === candidateId);
+      if (!c) return;
+
+      Modal.open(`
+      <div class="modal__header">
+        <h2 class="modal__title">✏️ Edit Profile</h2>
+        <button class="modal__close" onclick="Modal.close()" aria-label="Close">✕</button>
+      </div>
+      <div class="modal__body">
+        <p style="margin-bottom:var(--sp-3);color:var(--text-secondary)">Editing details for <strong>${escHtml(c.FullName)}</strong></p>
+        <div class="form-grid">
+          <div class="form-group col-span-2">
+            <label class="form-label" for="edit-phone">Phone Number <span class="required">*</span></label>
+            <input type="tel" class="form-input" id="edit-phone" value="${escHtml(c.Phone || '')}" required />
+          </div>
+          <div class="form-group col-span-2">
+            <label class="form-label" for="edit-notes">Notes</label>
+            <textarea class="form-textarea" id="edit-notes" rows="4" placeholder="Add additional instructions or remarks...">${escHtml(c.Notes || '')}</textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--outline" onclick="Modal.close()">Cancel</button>
+        <button class="btn btn--primary" id="edit-save-btn" onclick="Views._submitEditProfile('${candidateId}')">Save Changes</button>
+      </div>`);
+    },
+
+    async _submitEditProfile(candidateId) {
+      const phone = document.getElementById('edit-phone')?.value?.trim();
+      const notes = document.getElementById('edit-notes')?.value?.trim();
+
+      if (!phone) { Toast.warning('Phone number is required.'); return; }
+
+      const btn = document.getElementById('edit-save-btn');
+      btn.disabled = true;
+      btn.innerHTML = 'Saving...';
+
+      try {
+        const res = await GAS.call('api_updateCandidateDetails', candidateId, { phone, notes });
+        if (!res.success) throw new Error(res.error);
+
+        // Update local state
+        const cand = App.state.candidates.find(c => c.CandidateID === candidateId);
+        if (cand) {
+          cand.Phone = phone;
+          cand.Notes = notes;
+        }
+        if (App.state.selectedCandidate?.CandidateID === candidateId) {
+          App.state.selectedCandidate.Phone = phone;
+          App.state.selectedCandidate.Notes = notes;
+        }
+
+        Modal.close();
+        Toast.success('Profile updated successfully!');
+        Router.navigate('candidate-detail'); // Re-render detail view to show new values
+      } catch (err) {
+        Toast.error('Failed to update: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = 'Save Changes';
+      }
+    },
+
+    _openUploadModal(candidateId, folderId) {
+      const docTypes = ['Passport', 'Photo', 'Academic Certificate', 'Medical Examination', 'Medical Analysis', 'Visa', 'CV', 'Other'];
+      Modal.open(`
+      <div class="modal__header">
+        <h2 class="modal__title">📤 Upload Document</h2>
+        <button class="modal__close" onclick="Modal.close()" aria-label="Close">✕</button>
+      </div>
+      <div class="modal__body">
+        <div class="form-grid" style="gap:var(--sp-3)">
+          <div class="form-group col-span-2">
+            <label class="form-label" for="doc-type">Document Type <span class="required">*</span></label>
+            <select class="form-select" id="doc-type">
+              ${docTypes.map(t => `<option value="${t}">${t}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group col-span-2">
+            <label class="form-label">File <span class="required">*</span></label>
+            <div class="upload-zone" id="upload-zone">
+              <input type="file" id="upload-file" accept=".pdf,.jpg,.jpeg,.png"
+                     aria-label="Select document file"
+                     onchange="Views._onFileSelect(this)">
+              <div class="upload-zone__icon" aria-hidden="true">📁</div>
+              <div class="upload-zone__label" id="upload-label">Click to select or drag & drop</div>
+              <div class="upload-zone__hint">PDF, JPG, PNG — max 10 MB</div>
+            </div>
+          </div>
+        </div>
+        <div id="upload-progress" style="display:none;margin-top:var(--sp-3)">
+          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+            <div id="upload-bar" style="height:100%;width:0;background:var(--primary);transition:width .3s ease"></div>
+          </div>
+          <p style="font-size:.8rem;color:var(--text-secondary);margin-top:6px" id="upload-status-msg">Preparing…</p>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--outline" onclick="Modal.close()">Cancel</button>
+        <button class="btn btn--primary" id="upload-btn"
+                onclick="Views._submitUpload('${candidateId}','${folderId}')">Upload</button>
+      </div>`);
+    },
+
+    _onFileSelect(input) {
+      const file = input.files[0];
+      if (file) {
+        document.getElementById('upload-label').textContent = `📎 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+      }
+    },
+
+    async _submitUpload(candidateId, folderId) {
+      const fileInput = document.getElementById('upload-file');
+      const docType = document.getElementById('doc-type')?.value;
+      const file = fileInput?.files[0];
+
+      if (!file) { Toast.warning('Please select a file.'); return; }
+      if (file.size > 10 * 1024 * 1024) { Toast.warning('File exceeds 10 MB limit.'); return; }
+
+      const btn = document.getElementById('upload-btn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span> Uploading…`;
+
+      const progress = document.getElementById('upload-progress');
+      const bar = document.getElementById('upload-bar');
+      const statusMsg = document.getElementById('upload-status-msg');
+      progress.style.display = 'block';
+
+      try {
+        // Read file as base64
+        statusMsg.textContent = 'Reading file…';
+        bar.style.width = '20%';
+
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target.result.split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        statusMsg.textContent = 'Uploading to Google Drive…';
+        bar.style.width = '60%';
+
+        // Ensure folder exists
+        let actualFolderId = folderId;
+        if (!actualFolderId) {
+          const cand = App.state.selectedCandidate;
+          const folderRes = await GAS.call('api_createCandidateFolder', candidateId, cand?.FullName || candidateId);
+          if (!folderRes.success) throw new Error(folderRes.error);
+          actualFolderId = folderRes.folderId;
+        }
+
+        const res = await GAS.call('api_uploadFileToDrive', candidateId, actualFolderId, docType, file.name, base64, file.type);
+        if (!res.success) throw new Error(res.error);
+
+        bar.style.width = '100%';
+        statusMsg.textContent = 'Complete!';
+
+        setTimeout(() => {
+          Modal.close();
+          Toast.success(`${docType} uploaded successfully!`);
+          Views._loadCandidateDocuments(candidateId);
+          Views._loadCandidateAudit(candidateId);
+        }, 500);
+      } catch (err) {
+        Toast.error('Upload failed: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = 'Upload';
+        progress.style.display = 'none';
+      }
+    },
+
+    // ── NEW CANDIDATE FORM ─────────────────────
+    newCandidate(container) {
+      container.innerHTML = `
+      <div class="page-header">
+        <div>
+          <button class="btn btn--ghost btn--sm" onclick="Router.navigate('candidates')" style="margin-bottom:var(--sp-2);padding-left:0">
+            ← Back to Candidates
+          </button>
+          <h1 class="page-header__title">New Candidate</h1>
+          <p class="page-header__sub">Register a new candidate and initiate the mobilization process</p>
+        </div>
+      </div>
+
+      <!-- Workflow Steps -->
+      <div class="steps" role="list" aria-label="Registration steps">
+        <div class="step active" role="listitem"><div class="step__circle">1</div><div class="step__label">Basic Info</div></div>
+        <div class="step" role="listitem"><div class="step__circle">2</div><div class="step__label">Contract</div></div>
+        <div class="step" role="listitem"><div class="step__circle">3</div><div class="step__label">Send Invite</div></div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="table-toolbar__title">Candidate Information</span>
+        </div>
+        <div style="padding:var(--sp-4)">
+          <form id="new-candidate-form" onsubmit="Views._submitNewCandidate(event)">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label" for="nc-name">Full Name <span class="required">*</span></label>
+                <input class="form-input" type="text" id="nc-name" required placeholder="Ahmed Ali" autocomplete="name">
+                <span class="form-error" id="err-name"></span>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="nc-email">Email Address <span class="required">*</span></label>
+                <input class="form-input" type="email" id="nc-email" required placeholder="ahmed@example.com" autocomplete="email">
+                <span class="form-error" id="err-email"></span>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="nc-phone">Phone Number <span class="required">*</span></label>
+                <input class="form-input" type="tel" id="nc-phone" required placeholder="+201012345678">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="nc-nationality">Nationality <span class="required">*</span></label>
+                <select class="form-select" id="nc-nationality" required>
+                  <option value="">Select nationality…</option>
+                  <option>Egyptian</option><option>Sudanese</option><option>Jordanian</option>
+                  <option>Saudi</option><option>Yemeni</option><option>Moroccan</option><option>Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="nc-position">Job Position <span class="required">*</span></label>
+                <input class="form-input" type="text" id="nc-position" required placeholder="Civil Engineer">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="nc-department">Department <span class="required">*</span></label>
+                <select class="form-select" id="nc-department" required>
+                  <option value="">Select department…</option>
+                  <option>Projects</option><option>Maintenance</option><option>Finance</option>
+                  <option>HR</option><option>Operations</option><option>IT</option><option>Safety</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="nc-salary">Salary (OMR) <span class="required">*</span></label>
+                <input class="form-input" type="number" id="nc-salary" required placeholder="350" min="0" step="0.5">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="nc-coordinator">Assigned Coordinator Email</label>
+                <input class="form-input" type="email" id="nc-coordinator" placeholder="coordinator@company.com">
+              </div>
+            </div>
+
+            <div style="margin-top:var(--sp-4);display:flex;gap:var(--sp-2);justify-content:flex-end">
+              <button type="button" class="btn btn--outline" onclick="Router.navigate('candidates')">Cancel</button>
+              <button type="submit" class="btn btn--primary" id="submit-btn">
+                ＋ Create Candidate
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>`;
+    },
+
+    async _submitNewCandidate(e) {
+      e.preventDefault();
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span> Creating…`;
+
+      const payload = {
+        fullName: document.getElementById('nc-name').value.trim(),
+        email: document.getElementById('nc-email').value.trim(),
+        phone: document.getElementById('nc-phone').value.trim(),
+        nationality: document.getElementById('nc-nationality').value,
+        position: document.getElementById('nc-position').value.trim(),
+        department: document.getElementById('nc-department').value,
+        salary: document.getElementById('nc-salary').value,
+        coordinatorEmail: document.getElementById('nc-coordinator').value.trim() || App.state.currentUser.email
+      };
+
+      try {
+        const res = await GAS.call('api_createCandidate', payload);
+        if (!res.success) throw new Error(res.error);
+
+        // Auto-create Drive folder
+        await GAS.call('api_createCandidateFolder', res.candidateId, payload.fullName);
+
+        Toast.success(`✅ ${payload.fullName} registered!`);
+        // Refresh candidates list
+        const allRes = await GAS.call('api_getAllCandidates');
+        if (allRes.success) App.setState({ candidates: allRes.data });
+        Router.navigate('candidates');
+      } catch (err) {
+        Toast.error('Failed to create candidate: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '＋ Create Candidate';
+      }
+    },
+
+    // ── AUDIT LOG (Global) ─────────────────────
+    auditLog(container) {
+      container.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 class="page-header__title">Audit Log</h1>
+          <p class="page-header__sub">Complete system activity history across all candidates</p>
+        </div>
+      </div>
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="table-toolbar__title">All System Events</span>
+          <div class="table-toolbar__actions">
+            <div class="search-input">
+              <span class="search-input__icon" aria-hidden="true">🔍</span>
+              <input type="search" id="audit-search" placeholder="Search candidate…"
+                     aria-label="Search audit log" oninput="Views._filterAudit()">
+            </div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="audit-table">
+            <thead>
+              <tr>
+                <th scope="col">Timestamp</th>
+                <th scope="col">Candidate ID</th>
+                <th scope="col">Actor</th>
+                <th scope="col">Event</th>
+              </tr>
+            </thead>
+            <tbody id="audit-tbody">
+              <tr><td colspan="4"><div class="loading-overlay"><div class="spinner spinner--dark"></div>Loading…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+
+      Views._loadAllAuditLogs();
+    },
+
+    _allLogs: [],
+
+    async _loadAllAuditLogs() {
+      try {
+        const candsRes = await GAS.call('api_getAllCandidates');
+        if (!candsRes.success) throw new Error(candsRes.error);
+        const cands = candsRes.data.slice(0, 20); // limit for performance
+
+        const logPromises = cands.map(c => GAS.call('api_getAuditLog', c.CandidateID));
+        const results = await Promise.all(logPromises);
+
+        Views._allLogs = results.flatMap((r, i) =>
+          r.success ? r.data.map(l => ({ ...l, _candidateName: cands[i].FullName })) : []
+        ).sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
+
+        Views._renderAuditTable(Views._allLogs);
+      } catch (err) {
+        document.getElementById('audit-tbody').innerHTML =
+          `<tr><td colspan="4"><div class="table-empty">⚠️ ${escHtml(err.message)}</div></td></tr>`;
+        Toast.error('Failed to load audit log.');
+      }
+    },
+
+    _filterAudit() {
+      const q = document.getElementById('audit-search')?.value?.toLowerCase() || '';
+      const filtered = q
+        ? Views._allLogs.filter(l => l._candidateName?.toLowerCase().includes(q) || l.Event?.toLowerCase().includes(q) || l.Actor?.toLowerCase().includes(q))
+        : Views._allLogs;
+      Views._renderAuditTable(filtered);
+    },
+
+    _renderAuditTable(logs) {
+      const tbody = document.getElementById('audit-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = logs.length
+        ? logs.map(l => `
+          <tr>
+            <td style="white-space:nowrap">${fmt.dateTime(l.Timestamp)}</td>
+            <td>
+              <span style="font-size:.78rem;font-family:monospace;color:var(--text-secondary)">${escHtml((l.CandidateID || '').slice(0, 8))}…</span>
+              ${l._candidateName ? `<div style="font-size:.78rem;color:var(--text-muted)">${escHtml(l._candidateName)}</div>` : ''}
+            </td>
+            <td>${escHtml(l.Actor)}</td>
+            <td>${escHtml(l.Event)}</td>
+          </tr>`).join('')
+        : `<tr><td colspan="4"><div class="table-empty"><div class="table-empty__icon">📋</div>No log entries found.</div></td></tr>`;
+    },
+
+    // ── CALENDAR VIEW ──────────────────────────────
+    async calendar(container) {
+      container.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 class="page-header__title">Follow-up Calendar</h1>
+          <p class="page-header__sub">Manage candidate appointments and deadlines</p>
+        </div>
+        <div class="page-header__actions">
+          <button class="btn btn--outline btn--sm" onclick="Router.navigate('calendar')" aria-label="Refresh events">
+            🔄 Refresh
+          </button>
+        </div>
+      </div>
+      
+      <div class="calendar-filters">
+        <span class="quick-filters__label">Filters:</span>
+        <button class="quick-filter-btn" data-cal-filter="All" onclick="Views._applyCalendarFilter('All', this)">All</button>
+        <button class="quick-filter-btn" data-cal-filter="Today" onclick="Views._applyCalendarFilter('Today', this)">Today</button>
+        <button class="quick-filter-btn" data-cal-filter="Tomorrow" onclick="Views._applyCalendarFilter('Tomorrow', this)">Tomorrow</button>
+        <button class="quick-filter-btn" data-cal-filter="ThisWeek" onclick="Views._applyCalendarFilter('ThisWeek', this)">This Week</button>
+        <button class="quick-filter-btn" data-cal-filter="Overdue" onclick="Views._applyCalendarFilter('Overdue', this)">Overdue</button>
+        <button class="quick-filter-btn" data-cal-filter="HighPriority" onclick="Views._applyCalendarFilter('HighPriority', this)">High Priority</button>
+      </div>
+
+      <div class="calendar-grid">
+        <div class="month-calendar" id="month-calendar"></div>
+        <div class="calendar-sidebar">
+           <div class="kpi-card kpi-card--blue">
+             <div class="kpi-card__label">Active Events</div>
+             <div class="kpi-card__value" id="cal-kpi-active">--</div>
+             <div class="kpi-card__icon" aria-hidden="true">📅</div>
+           </div>
+           <div class="calendar-agenda__title" id="calendar-agenda-title">Upcoming Events</div>
+           <div class="calendar-list" id="calendar-event-list">
+             <div class="loading-overlay"><div class="spinner spinner--dark"></div>Loading upcoming events…</div>
+           </div>
+        </div>
+      </div>`;
+
+      Views._calendarCursor = new Date();
+      Views._calendarSelectedDate = null;
+
+      try {
+        const res = await GAS.call('api_getAllUpcomingEvents');
+        if (res.success) {
+          App.setState({ calendarEvents: res.data });
+          Views._upcomingCount = res.data.length;
+          renderSidebar(); // update badge
+          
+          document.getElementById('cal-kpi-active').textContent = res.data.length;
+          
+          Views._renderMonthCalendar();
+          
+          const initialFilter = App.state.filter || 'All';
+          const btn = document.querySelector(`button[data-cal-filter="${initialFilter}"]`);
+          Views._applyCalendarFilter(initialFilter, btn);
+        } else {
+          throw new Error(res.error);
+        }
+      } catch (err) {
+        Toast.error('Failed to load events.');
+        document.getElementById('calendar-event-list').innerHTML = `<div class="table-empty"><div class="table-empty__icon">⚠️</div>Failed to load events: ${escHtml(err.message)}</div>`;
+      }
+    },
+
+    _applyCalendarFilter(filterName, btnEl) {
+      Views._calendarSelectedDate = null;
+      if (document.getElementById('month-calendar')) Views._renderMonthCalendar();
+      const agendaTitleEl = document.getElementById('calendar-agenda-title');
+      if (agendaTitleEl) agendaTitleEl.textContent = 'Upcoming Events';
+
+      if (btnEl) {
+        document.querySelectorAll('.quick-filter-btn').forEach(b => b.classList.remove('quick-filter-btn--active'));
+        btnEl.classList.add('quick-filter-btn--active');
+      } else {
+        document.querySelectorAll('.quick-filter-btn').forEach(b => {
+          if (b.dataset.calFilter === filterName) b.classList.add('quick-filter-btn--active');
+          else b.classList.remove('quick-filter-btn--active');
+        });
+      }
+
+      const all = App.state.calendarEvents || [];
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const nextWeek = new Date(today);
+      nextWeek.setDate(nextWeek.getDate() + 7);
+
+      let filtered = all;
+      
+      if (filterName === 'Today') {
+        filtered = all.filter(e => {
+          const d = new Date(e.EventDate);
+          return d.getTime() === today.getTime();
+        });
+      } else if (filterName === 'Tomorrow') {
+         filtered = all.filter(e => {
+          const d = new Date(e.EventDate);
+          return d.getTime() === tomorrow.getTime();
+        });
+      } else if (filterName === 'ThisWeek') {
+         filtered = all.filter(e => {
+          const d = new Date(e.EventDate);
+          return d >= today && d <= nextWeek;
+        });
+      } else if (filterName === 'Overdue') {
+         filtered = all.filter(e => {
+          const d = new Date(e.EventDate);
+          return d < today;
+        });
+      } else if (filterName === 'HighPriority') {
+         filtered = all.filter(e => e.Priority === 'High');
+      }
+      
+      // Sort chronologically
+      filtered.sort((a,b) => new Date(a.EventDate) - new Date(b.EventDate));
+
+      Views._renderEventList(filtered, 'calendar-event-list');
+    },
+
+    _renderMonthCalendar() {
+      const el = document.getElementById('month-calendar');
+      if (!el) return;
+
+      const cursor = Views._calendarCursor || (Views._calendarCursor = new Date());
+      const year = cursor.getFullYear();
+      const month = cursor.getMonth();
+      const monthLabel = cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      const firstDay = new Date(year, month, 1);
+      const startOffset = firstDay.getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const events = App.state.calendarEvents || [];
+      const eventsByDay = {};
+      events.forEach(e => {
+        const key = e.EventDate;
+        if (!key) return;
+        if (!eventsByDay[key]) eventsByDay[key] = [];
+        eventsByDay[key].push(e);
+      });
+
+      const weekDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+      let cellsHtml = '';
+
+      for (let i = startOffset - 1; i >= 0; i--) {
+        const d = daysInPrevMonth - i;
+        cellsHtml += `<div class="month-calendar__day month-calendar__day--muted"><div class="month-calendar__day-num">${d}</div></div>`;
+      }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateObj = new Date(year, month, d);
+        const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dayEvents = eventsByDay[dateKey] || [];
+        const isToday = dateObj.getTime() === today.getTime();
+        const isSelected = Views._calendarSelectedDate === dateKey;
+
+        let dotsHtml = '';
+        if (dayEvents.length > 0) {
+          const shown = dayEvents.slice(0, 3);
+          dotsHtml = `<div class="month-calendar__dots">` +
+            shown.map(e => `<span class="month-calendar__dot month-calendar__dot--${(e.Priority || 'medium').toLowerCase()}" title="${escHtml(e.Title)}"></span>`).join('') +
+            (dayEvents.length > 3 ? `<span class="month-calendar__more">+${dayEvents.length - 3}</span>` : '') +
+            `</div>`;
+        }
+
+        cellsHtml += `
+          <div class="month-calendar__day ${isToday ? 'month-calendar__day--today' : ''} ${dayEvents.length ? 'month-calendar__day--has-events' : ''} ${isSelected ? 'month-calendar__day--selected' : ''}"
+               onclick="Views._selectCalendarDay('${dateKey}')">
+            <div class="month-calendar__day-num">${d}</div>
+            ${dotsHtml}
+          </div>`;
+      }
+
+      const totalCells = startOffset + daysInMonth;
+      const trailing = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+      for (let d = 1; d <= trailing; d++) {
+        cellsHtml += `<div class="month-calendar__day month-calendar__day--muted"><div class="month-calendar__day-num">${d}</div></div>`;
+      }
+
+      el.innerHTML = `
+        <div class="month-calendar__header">
+          <button class="btn btn--icon btn--outline" onclick="Views._calNavigate(-1)" aria-label="Previous month">‹</button>
+          <div class="month-calendar__label">${monthLabel}</div>
+          <button class="btn btn--icon btn--outline" onclick="Views._calNavigate(1)" aria-label="Next month">›</button>
+          <button class="btn btn--outline btn--sm month-calendar__today-btn" onclick="Views._calGoToday()">Today</button>
+        </div>
+        <div class="month-calendar__weekdays">
+          ${weekDays.map(w => `<div class="month-calendar__weekday">${w}</div>`).join('')}
+        </div>
+        <div class="month-calendar__days">
+          ${cellsHtml}
+        </div>
+      `;
+    },
+
+    _calNavigate(delta) {
+      const c = Views._calendarCursor || new Date();
+      Views._calendarCursor = new Date(c.getFullYear(), c.getMonth() + delta, 1);
+      Views._renderMonthCalendar();
+    },
+
+    _calGoToday() {
+      Views._calendarCursor = new Date();
+      Views._calendarSelectedDate = null;
+      Views._renderMonthCalendar();
+      const agendaTitleEl = document.getElementById('calendar-agenda-title');
+      if (agendaTitleEl) agendaTitleEl.textContent = 'Upcoming Events';
+      const initialFilter = App.state.filter || 'All';
+      const btn = document.querySelector(`button[data-cal-filter="${initialFilter}"]`);
+      Views._applyCalendarFilter(initialFilter, btn);
+    },
+
+    _selectCalendarDay(dateKey) {
+      Views._calendarSelectedDate = (Views._calendarSelectedDate === dateKey) ? null : dateKey;
+      Views._renderMonthCalendar();
+
+      document.querySelectorAll('.quick-filter-btn').forEach(b => b.classList.remove('quick-filter-btn--active'));
+
+      const agendaTitleEl = document.getElementById('calendar-agenda-title');
+      const all = App.state.calendarEvents || [];
+
+      if (Views._calendarSelectedDate) {
+        const dayEvents = all
+          .filter(e => e.EventDate === dateKey)
+          .sort((a, b) => (a.EventTime || '').localeCompare(b.EventTime || ''));
+        const [y, m, d] = dateKey.split('-').map(Number);
+        const label = new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long' });
+        if (agendaTitleEl) agendaTitleEl.textContent = `Events on ${label}`;
+        Views._renderEventList(dayEvents, 'calendar-event-list', 'No events scheduled for this day.');
+      } else {
+        if (agendaTitleEl) agendaTitleEl.textContent = 'Upcoming Events';
+        const initialFilter = App.state.filter || 'All';
+        const btn = document.querySelector(`button[data-cal-filter="${initialFilter}"]`);
+        Views._applyCalendarFilter(initialFilter, btn);
+      }
+    },
+
+    _renderEventList(events, containerId, noDataMsg = 'No upcoming events found.') {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      
+      if (events.length === 0) {
+        el.innerHTML = `<div class="table-empty"><div class="table-empty__icon">📅</div>${noDataMsg}</div>`;
+        return;
+      }
+
+      el.innerHTML = events.map(e => {
+        const d = new Date(e.EventDate);
+        const dateStr = d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+        const isPast = d < new Date(new Date().setHours(0,0,0,0));
+        
+        return `
+        <div class="event-card">
+          <div class="event-card__header">
+            <div>
+              <div class="event-card__title">${escHtml(e.Title)} ${isPast && e.Status === 'Active' ? '<span style="color:var(--danger);font-size:.75rem">⚠️ Overdue</span>' : ''}</div>
+              <div class="event-card__subtitle">Candidate: <strong>${escHtml(e.CandidateName)}</strong></div>
+            </div>
+            <div class="priority-badge priority-badge--${(e.Priority||'medium').toLowerCase()}">${escHtml(e.Priority)}</div>
+          </div>
+          
+          <div class="event-card__meta">
+            <div class="event-card__meta-item">
+              <span>📅</span> ${dateStr} ${e.EventTime ? 'at ' + e.EventTime : '(All Day)'}
+            </div>
+            ${e.CandidatePhone ? `
+            <div class="event-card__meta-item">
+              <span>📞</span> <span class="event-card__phone" title="Double-click to select, then copy">${escHtml(e.CandidatePhone)}</span>
+            </div>` : ''}
+            ${e.GoogleCalendarLink ? `
+            <div class="event-card__meta-item">
+              <span>🔗</span> <a href="${e.GoogleCalendarLink}" target="_blank" rel="noopener">Open in GCal ↗</a>
+            </div>` : ''}
+          </div>
+          
+          ${e.Description ? `<div style="font-size:.8rem;margin-top:4px;white-space:pre-wrap;color:var(--text-secondary)">${escHtml(e.Description)}</div>` : ''}
+          
+          <div class="event-card__actions">
+            ${e.Status === 'Active' ? `<button class="btn btn--outline btn--sm" onclick="Views._markEventComplete('${e.EventID}')">✔️ Mark Completed</button>` : `<span class="event-status event-status--${e.Status.toLowerCase()}">${e.Status}</span>`}
+          </div>
+        </div>`;
+      }).join('');
+    },
+
+    async _loadCandidateEvents(candidateId) {
+      try {
+        const res = await GAS.call('api_getEventsByCandidate', candidateId);
+        if (res.success) {
+          Views._renderEventList(res.data, 'events-section', 'No events scheduled for this candidate.');
+        } else {
+          document.getElementById('events-section').innerHTML = '<div class="form-error">Failed to load events.</div>';
+        }
+      } catch (err) {
+        document.getElementById('events-section').innerHTML = '<div class="form-error">Error loading events.</div>';
+      }
+    },
+
+    _openEventModal(candidateId) {
+      Modal.open(`
+        <div class="modal__header">
+          <div class="modal__title">📅 Schedule Follow-up Event</div>
+          <button class="modal__close" onclick="Modal.close()" aria-label="Close">✕</button>
+        </div>
+        <div class="modal__body">
+          <form id="eventForm" class="form-grid" onsubmit="Views._submitEvent(event, '${candidateId}')">
+            
+            <div class="form-group col-span-2">
+              <label class="form-label">Event Title <span class="required">*</span></label>
+              <input type="text" id="evTitle" class="form-input" required placeholder="e.g. Passport Collection">
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Date <span class="required">*</span></label>
+              <input type="date" id="evDate" class="form-input" required>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Time <span style="font-weight:normal;color:var(--text-muted)">(Optional - leave blank for all day)</span></label>
+              <input type="time" id="evTime" class="form-input">
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Priority</label>
+              <select id="evPriority" class="form-select">
+                <option value="Low">Low</option>
+                <option value="Medium" selected>Medium</option>
+                <option value="High">High</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Reminder <span style="font-weight:normal;color:var(--text-muted)">(Minutes before)</span></label>
+              <input type="number" id="evReminder" class="form-input" value="30" min="0">
+            </div>
+
+            <div class="form-group col-span-2">
+              <label class="form-label">Description / Notes</label>
+              <textarea id="evDescription" class="form-textarea" rows="3" placeholder="Additional details to include in the calendar invite..."></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--ghost" onclick="Modal.close()">Cancel</button>
+          <button class="btn btn--primary" type="submit" form="eventForm" id="btnSubmitEvent">Schedule Event</button>
+        </div>
+      `);
+      
+      // Default to tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      document.getElementById('evDate').value = tomorrow.toISOString().split('T')[0];
+    },
+
+    async _submitEvent(e, candidateId) {
+      e.preventDefault();
+      const btn = document.getElementById('btnSubmitEvent');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Scheduling...';
+      
+      const payload = {
+        title: document.getElementById('evTitle').value,
+        eventDate: document.getElementById('evDate').value,
+        eventTime: document.getElementById('evTime').value,
+        priority: document.getElementById('evPriority').value,
+        reminderMinutesBefore: document.getElementById('evReminder').value,
+        description: document.getElementById('evDescription').value
+      };
+      
+      try {
+        const res = await GAS.call('api_createCalendarEvent', candidateId, payload);
+        if (res.success) {
+          Toast.success('Calendar event scheduled.');
+          Modal.close();
+          Views._loadCandidateEvents(candidateId);
+        } else {
+          Toast.error(res.error || 'Failed to schedule event.');
+          btn.disabled = false;
+          btn.innerHTML = 'Schedule Event';
+        }
+      } catch (err) {
+        Toast.error('An unexpected error occurred.');
+        btn.disabled = false;
+        btn.innerHTML = 'Schedule Event';
+      }
+    },
+
+    async _markEventComplete(eventId) {
+      if (!confirm('Mark this event as completed?')) return;
+      try {
+        const res = await GAS.call('api_markEventCompleted', eventId);
+        if (res.success) {
+          Toast.success('Event marked as completed.');
+          // Refresh current view (could be candidate detail or calendar view)
+          const cv = App.state.currentView;
+          if (cv === 'calendar') Router.navigate('calendar');
+          else if (cv === 'candidate-detail') Views._loadCandidateEvents(App.state.selectedCandidate.CandidateID);
+        } else {
+          Toast.error(res.error || 'Failed to update event.');
+        }
+      } catch (err) {
+        Toast.error('An unexpected error occurred.');
+      }
+    }
+  };
+
+  // ─────────────────────────────────────────────
+  // APP INIT
+  // ─────────────────────────────────────────────
+
+  const initApp = () => {
+    // Resolve current user email if in GAS environment
+    if (GAS.isLive && typeof google !== 'undefined') {
+      try {
+        // Attempt to pre-fetch user info (non-blocking)
+      } catch (_) { }
+    }
+
+    // Initialize sidebar state
+    const savedSidebar = localStorage.getItem('hr_sidebar_collapsed');
+    const shouldCollapse = savedSidebar === 'true' || window.innerWidth < 768;
+    App.toggleSidebar(shouldCollapse);
+
+    // Auto-collapse on small screens during resize
+    window.addEventListener('resize', () => {
+      if (window.innerWidth < 768 && !App.state.sidebarCollapsed) {
+        App.toggleSidebar(true);
+      }
+    });
+
+    renderTopbar();
+    renderSidebar();
+    Router.navigate('candidates');
+  };
+
+  document.addEventListener('DOMContentLoaded', initApp);
+</script>

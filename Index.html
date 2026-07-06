@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Enterprise HR Mobilization System – Manage candidate documents, approvals, and mobilization workflows.">
+    <title>HR Mobilization System</title>
+    <?!= include('Styles'); ?>
+</head>
+
+<body>
+
+    <!-- ===== APP SHELL ===== -->
+    <div class="app" id="app">
+
+        <!-- Top Navigation Bar -->
+        <header class="topbar" id="topbar" role="banner"></header>
+
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar" id="sidebar" aria-label="Main navigation"></nav>
+
+        <!-- Main Content Area -->
+        <main class="content" id="app-view" role="main" tabindex="-1"></main>
+
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Modals rendered here by JS -->
+    <div id="modal-root"></div>
+
+    <?!= include('Script'); ?>
+</body>
+
+</html>
